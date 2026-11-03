@@ -15,9 +15,10 @@ const SHARED_DEFAULTS = {
   preset: 'normal',
   schedule: { enabled: true, day: 0, hour: 20, minute: 0 },   // Sunday 20:00, the device's local time
   watch: { enabled: true, hour: 22, minute: 30 },           // weekdays, after the US close
-  autoEmergency: false, catchUp: true, secContact: '',
+  autoEmergency: false, catchUp: true,
 };
-const LOCAL_DEFAULTS = { tray: true, syncRepo: '', device: '' };
+// The SEC contact (a name and email) stays on each device: the sync repository may be public.
+const LOCAL_DEFAULTS = { tray: true, syncRepo: '', device: '', secContact: '' };
 const SHARED_KEYS = Object.keys(SHARED_DEFAULTS);
 
 function createCore({ platform = 'pc', version = '1.0.0', deviceName = 'device', secrets = null, onEvents = () => {}, onChanged = () => {}, keepAlive = () => {}, notify = () => {} } = {}) {
