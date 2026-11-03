@@ -110,14 +110,15 @@ function fmtProposal(k, p) {
 const fmtConsensus = (c) => c.slice(0, 25).map((x) => `${x.ticker} ${x.weight.toFixed(1)}% (${x.votes} seats)`).join(', ');
 
 /* ── The session ─────────────────────────────────────────────────────────── */
-async function run({ preset = 'normal', trigger = 'manual', emit = () => {}, signal, settings = {} }) {
+async function run({ preset = 'normal', trigger = 'manual', emit = () => {}, signal, settings = {}, device = null }) {
   const cfg = C.PRESETS[preset];
   if (!cfg) throw new Error('Unknown preset ' + preset);
   if (!llm.isMock() && !llm.hasKey()) throw Object.assign(new Error('ANTHROPIC_API_KEY is not set.'), { code: 'NO_KEY' });
   // Keep a compact log of the session so the chamber can replay it later.
   const rec = [], t0 = Date.now(), live = emit;
   emit = (e) => { if (['start', 'phase', 'turn', 'said', 'final'].includes(e.type) || (e.type === 'desk' && e.state !== 'reading')) rec.push({ ...e, ms: Date.now() - t0 }); live(e); };
-  const s = makeSession(preset, trigger), ledgerFile = s.demo ? 'demo-ledger.jsonl' : 'ledger.jsonl';
+  const s = makeSession(preset, trigger); s.device = device;
+  const ledgerFile = s.demo ? 'demo-ledger.jsonl' : 'ledger.jsonl';
   const phases = ['data', 'analysts', ...(cfg.scout ? ['scout'] : []), 'round1', ...Array.from({ length: cfg.rounds }, (_, i) => 'debate' + (i + 1)), ...(cfg.redTeam ? ['redteam'] : []), ...(cfg.rebuttal ? ['rebuttal'] : []), 'risk', 'chair', 'record'];
   const LABEL = { data: 'Gathering data', analysts: 'Analysts read the universe', scout: 'Scout searches the web', round1: 'Independent proposals', redteam: 'Red team attacks', rebuttal: 'Rebuttals', risk: 'Risk review', chair: 'Chair decides', record: 'Recording' };
   const phase = (key) => emit({ type: 'phase', key, label: LABEL[key] || (key.startsWith('debate') ? `Debate, round ${key.slice(6)}` : key), i: phases.indexOf(key), n: phases.length });

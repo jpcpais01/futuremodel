@@ -1,4 +1,4 @@
-/* Oazy Council for the phone. It follows the council running on the PC over the home network. */
+/* Oazy Council for the phone. The council runs here, on the phone's own key, and shares one account with the PC app. */
 'use strict';
 const $ = (s, el = document) => el.querySelector(s), $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -9,105 +9,91 @@ const fw = (w) => (w == null ? '—' : (+w).toFixed(1) + '%');
 const when = (ts) => new Date(ts).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 const LS = { get: (k, d) => { try { const v = localStorage.getItem('oc.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('oc.' + k, JSON.stringify(v)); } catch {} } };
 
-let host = LS.get('host', ''), code = LS.get('code', ''), demo = LS.get('demo', false), preset = 'normal';
-let S = LS.get('state', null), P = null, allowRun = true, es = null, sess = null, screen = 'council';
+let demo = LS.get('demo', false), preset = null;
+let S = null, P = null, sess = null, screen = 'council', elsewhere = null;
 const SEAT = {}, UNI = {};
 
 function toast(m, err) { const t = $('#toast'); t.textContent = m; t.className = 'on' + (err ? ' err' : ''); clearTimeout(toast.t); toast.t = setTimeout(() => (t.className = ''), 3800); }
-async function api(path, { method = 'GET', body, timeout = 12000 } = {}) {
-  const ac = new AbortController(), t = setTimeout(() => ac.abort(), timeout);
-  try {
-    const r = await fetch(host + path, { method, signal: ac.signal, headers: { 'x-council-code': code, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body && JSON.stringify(body) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw Object.assign(new Error(j.error || 'HTTP ' + r.status), { status: r.status });
-    return j;
-  } finally { clearTimeout(t); }
-}
-const q = () => (demo ? '?demo=1' : '');
 
-/* ── Pairing ─────────────────────────────────────────────────────────── */
-function showPair(msg) {
-  $('#app').classList.add('hidden'); $('#pair').classList.remove('hidden');
-  $('#p-host').value = host || (location.protocol.startsWith('http') ? location.origin : '');
-  $('#p-code').value = code; $('#p-err').textContent = msg || '';
-}
-$('#p-go').onclick = async () => {
-  let h = $('#p-host').value.trim().replace(/\/+$/, '');
-  if (h && !/^https?:\/\//.test(h)) h = 'http://' + h;
-  if (h && !/:\d+$/.test(h)) h += ':7717';
-  const c = $('#p-code').value.trim().toUpperCase();
-  $('#p-err').textContent = ''; $('#p-go').disabled = true; $('#p-go').textContent = 'Connecting…';
-  const old = [host, code]; host = h; code = c;
-  try { const r = await api('/api/hello', { timeout: 6000 }); LS.set('host', h); LS.set('code', c); allowRun = r.allowRun; start(); }
-  catch (e) { [host, code] = old; $('#p-err').textContent = e.status === 401 ? 'That code is not right. Check the desktop Settings.' : e.status === 429 ? e.message : 'Could not reach the PC. Check the address, that both are on the same Wi-Fi, and that Phone link is on.'; }
-  finally { $('#p-go').disabled = false; $('#p-go').textContent = 'Connect'; }
-};
+/* The engine: the same council core the PC app runs. */
+const OC = window.OazyCore.create({
+  onEvents: (list) => list.forEach((e) => (e.type === 'log' ? toast(e.text) : handle(e))),
+  onChanged: (why) => { if (why === 'running') return; refresh(); },
+});
 
 /* ── Boot ────────────────────────────────────────────────────────────── */
-async function start() {
-  $('#pair').classList.add('hidden'); $('#app').classList.remove('hidden');
+function start() {
   setMode(demo);
-  if (S) setup(S);
-  try { const h = await api('/api/hello'); allowRun = h.allowRun; await refresh(); conn(true); }
-  catch (e) { conn(false); if (e.status === 401) return showPair('The pairing code changed. Enter the new one.'); toast(S ? 'Offline. Showing what was last seen.' : 'Could not reach the PC.', true); }
-  listen();
+  refresh();
+  if (!S.hasKey) { show('settings'); toast('Paste your Anthropic API key to start.'); }
+  OC.refreshMarks().catch(() => {});
+  syncAndCheck();
+  setInterval(syncAndCheck, 60e3);
 }
-function conn(ok) { $('#conn').className = 'conn ' + (ok ? 'ok' : 'bad'); }
+function conn(state) { $('#conn').className = 'conn ' + state; }
 function setup(st) {
   Object.assign(SEAT, st.seats, st.officers); st.universe.forEach((u) => (UNI[u.t] = u));
   if (!Ch.ready) Ch.init(st);
 }
-async function refresh() {
-  S = await api('/api/state'); LS.set('state', S); setup(S);
-  if (S.running && !sess) { const ev = await api('/api/live'); ev.forEach((e) => handle(e)); }
+function refresh() {
+  S = OC.state(); setup(S);
+  if (!preset) preset = S.settings.preset;
   renderIdle();
-  if (screen !== 'council') show(screen);
+  if (screen !== 'council' && screen !== 'session') show(screen);
 }
-function listen() {
-  if (es) es.close();
-  es = new EventSource(`${host}/api/events?code=${encodeURIComponent(code)}`);
-  es.onopen = () => conn(true);
-  es.onerror = () => conn(false);
-  es.onmessage = (m) => { try { JSON.parse(m.data).forEach((e) => handle(e)); } catch {} };
-  es.addEventListener('changed', () => refresh().catch(() => {}));
+/* Every minute while open: catch up with the account, see whether the PC is in session, and run the cheap daily watch when it is owed. */
+let checking = false;
+async function syncAndCheck() {
+  if (checking || document.hidden) return; checking = true;
+  try {
+    if (!S.sync.on) { conn('off'); return; }
+    const r = await OC.syncNow(); conn(r.error ? 'bad' : 'ok');
+    const was = elsewhere; elsewhere = OC.isRunning() ? null : await OC.remoteLive().catch(() => null);
+    if (r.changed || was || elsewhere) refresh(); else renderIdle();
+    if (!elsewhere && !OC.isRunning() && S.hasKey && OC.watchDue()) { const w = await OC.watch(false); if (w?.convene) toast('The watch flagged a broken thesis: ' + w.statement, true); refresh(); }
+  } catch { conn('bad'); } finally { checking = false; }
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && host) refresh().then(() => conn(true), () => conn(false)); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) syncAndCheck(); });
 
 function setMode(d) { demo = d; LS.set('demo', d); const b = $('#mode'); b.textContent = d ? 'Demo' : 'Paper'; b.classList.toggle('demo', d); $('#demo').checked = d; }
 $('#mode').onclick = () => { setMode(!demo); renderIdle(); if (screen !== 'council') show(screen); };
-$$('#tabs button').forEach((b) => (b.onclick = () => (b.dataset.s === 'pair' ? showPair() : show(b.dataset.s))));
+$$('#tabs button').forEach((b) => (b.onclick = () => show(b.dataset.s)));
 function show(s) {
   screen = s; window.scrollTo(0, 0);
   $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.s === s || (s === 'session' && b.dataset.s === 'sessions')));
   $$('.screen').forEach((x) => x.classList.toggle('on', x.id === 's-' + s));
-  if (s === 'portfolio') renderPortfolio(); if (s === 'record') renderRecord(); if (s === 'sessions') renderSessions();
+  if (s === 'portfolio') renderPortfolio(); if (s === 'record') renderRecord(); if (s === 'sessions') renderSessions(); if (s === 'settings') renderSettings();
 }
 
 /* ── Council ─────────────────────────────────────────────────────────── */
-async function renderIdle() {
+function renderIdle() {
   if (!S) return;
   const live = !!sess && !sess.ended;
   $('#live').classList.toggle('hidden', !sess); $('#idle').classList.toggle('hidden', live);
   $('#next').textContent = S.next?.session ? 'Next weekly session ' + when(S.next.session) : '';
-  $('#conv').classList.toggle('hidden', !allowRun || !!S.running);
+  $('#conv').classList.toggle('hidden', !!S.running || (!!elsewhere && !demo));
+  const due = !demo && S.due && S.hasKey && !elsewhere && !S.running;
+  $('#due').classList.toggle('hidden', !due);
   $('#presets').innerHTML = ['low', 'normal', 'high'].map((k) => `<button class="preset ${k === preset ? 'on' : ''}" data-k="${k}"><b>${S.presets[k].label}</b><span>${demo ? 'free' : '~' + money(S.presets[k].est.mid)}</span></button>`).join('');
   $$('#presets .preset').forEach((b) => (b.onclick = () => { preset = b.dataset.k; renderIdle(); }));
-  $('#go').disabled = !demo && !S.hasKey; $('#go').textContent = !demo && !S.hasKey ? 'No API key on the PC' : demo ? 'Convene (demo)' : 'Convene';
+  $('#go').disabled = !demo && !S.hasKey; $('#go').textContent = !demo && !S.hasKey ? 'Paste your API key in Settings' : demo ? 'Convene (demo)' : 'Convene';
   if (!live) {
-    $('#c-phase').textContent = S.running ? 'In session' : 'Adjourned'; $('#c-sub').textContent = '';
-    try { P = await api('/api/portfolio' + q()); LS.set('pf' + demo, P); } catch { P = LS.get('pf' + demo, null); }
+    if (elsewhere && !demo) { $('#c-phase').textContent = 'In session on ' + elsewhere.device; $('#c-sub').textContent = (elsewhere.phase?.label || 'Convening') + (elsewhere.last?.text ? ' · ' + elsewhere.last.text.slice(0, 90) + '…' : ''); }
+    else { $('#c-phase').textContent = S.running ? 'In session' : 'Adjourned'; $('#c-sub').textContent = ''; }
+    P = OC.portfolio(demo);
     const f = P?.final;
     $('#last').innerHTML = f ? `<div class="eyebrow">${demo ? 'Demo · ' : ''}Latest decision · ${when(P.decidedAt)}</div><h3>${f.holdings.length} holdings, ${fw(f.cash_pct)} cash</h3><p>${esc(f.summary)}</p><div class="chips">${f.holdings.slice().sort((a, b) => b.weight - a.weight).map((h) => `<span class="chip"><b>${esc(h.ticker)}</b> ${fw(h.weight)}</span>`).join('')}</div>` : `<div class="eyebrow">No decision yet</div><p style="margin-top:6px">The council has not met${demo ? ' in demo mode' : ''}. Convene it here or on the PC.</p>`;
     if (f && !sess) Ch.final(f.holdings, false);
   }
 }
 $('#demo').onchange = (e) => { setMode(e.target.checked); renderIdle(); };
-$('#go').onclick = async () => {
-  $('#go').disabled = true;
-  try { await api('/api/run', { method: 'POST', body: { preset, demo } }); toast('The council is convening.'); }
-  catch (e) { toast(e.message, true); } finally { $('#go').disabled = false; }
-};
-$('#l-cancel').onclick = async () => { try { await api('/api/cancel', { method: 'POST', body: {} }); toast('Adjourning after the current call.'); } catch (e) { toast(e.message, true); } };
+function convene(p, d) {
+  $('#go').disabled = true; $('#due-go').disabled = true;
+  OC.run(p, d).catch((e) => { toast(e.message, true); if (sess && !sess.ended) { sess = null; Ch.reset(); Ch.allPresent(); } }).finally(() => { $('#due-go').disabled = false; refresh(); });
+}
+$('#go').onclick = () => convene(preset, demo);
+$('#due-go').onclick = () => convene(S.settings.preset, false);
+$('#l-cancel').onclick = () => { OC.cancel(); $('#l-cancel').disabled = true; toast('Adjourning after the current call.'); };
 
 const roundLabel = (e) => ({ redteam: 'Red team', risk: 'Risk review', chair: 'Decision', scout: 'Briefing' }[e.kind] || (e.round === 1 ? 'Round 1' : e.round === 9 ? 'Rebuttal' : 'Debate ' + (e.round - 1)));
 function handle(e) {
@@ -116,7 +102,7 @@ function handle(e) {
     sess = { info: i, seats: {}, focus: null, cost: 0, est: i.demo ? 0 : S.presets[i.preset]?.est.mid, props: {}, n: i.phases.length, reports: 0 };
     Ch.reset(); Ch.present([...i.members, ...i.officers, ...(i.phases.some((p) => p.key === 'scout') ? ['scout'] : [])]);
     $('#feed').innerHTML = ''; $('#floor').classList.add('hidden'); $('#l-cost').textContent = i.demo ? 'demo' : money(0); $('#l-bar').style.width = '0';
-    $('#l-cancel').classList.toggle('hidden', !allowRun);
+    $('#l-cancel').classList.remove('hidden'); $('#l-cancel').disabled = false;
     if (screen !== 'council') show('council');
     renderIdle(); return;
   }
@@ -137,8 +123,8 @@ function handle(e) {
     }
     case 'cost': sess.cost = e.total; if (!sess.info.demo) $('#l-cost').textContent = money(e.total) + (sess.est ? ' of ~' + money(sess.est) : ''); break;
     case 'final': Ch.final(e.final.holdings, true); $('#c-phase').textContent = 'The council has decided'; $('#c-sub').textContent = `${e.final.holdings.length} holdings · confidence ${e.final.confidence}`; $('#floor').classList.add('hidden'); break;
-    case 'done': sess.ended = true; $('#l-cancel').classList.add('hidden'); toast(sess.info.demo ? 'Demo session recorded.' : `Session recorded. It cost ${money(e.cost)}.`); setTimeout(() => { sess = null; refresh().catch(() => {}); }, 6000); break;
-    case 'failed': toast(e.error === 'Cancelled' ? 'Session adjourned.' : 'Session failed: ' + e.error, e.error !== 'Cancelled'); sess = null; Ch.reset(); Ch.allPresent(); refresh().catch(() => {}); break;
+    case 'done': sess.ended = true; $('#l-cancel').classList.add('hidden'); toast(sess.info.demo ? 'Demo session recorded.' : `Session recorded. It cost ${money(e.cost)}.`); setTimeout(() => { sess = null; refresh(); }, 6000); break;
+    case 'failed': toast(e.error === 'Cancelled' ? 'Session adjourned.' : 'Session failed: ' + e.error, e.error !== 'Cancelled'); sess = null; Ch.reset(); Ch.allPresent(); refresh(); break;
   }
 }
 function focus(k) {
@@ -154,8 +140,8 @@ function feed(e, text, d) {
 }
 
 /* ── Portfolio ───────────────────────────────────────────────────────── */
-async function renderPortfolio() {
-  try { P = await api('/api/portfolio' + q()); LS.set('pf' + demo, P); } catch { P = LS.get('pf' + demo, null); if (!P) return; }
+function renderPortfolio() {
+  P = OC.portfolio(demo);
   const f = P.final, st = P.stats, nav = P.series.length ? P.series[P.series.length - 1][1] : P.capital;
   $('#pf-asof').textContent = f ? `${demo ? 'Demo · ' : ''}decided ${when(P.decidedAt)}` : demo ? 'Demo record' : 'Paper record';
   if (!f) { $('#pf-kpis').innerHTML = ''; $('#pf-sum').textContent = 'No decision yet.'; $('#pf-list').innerHTML = ''; $('#pf-note').classList.add('hidden'); return; }
@@ -173,14 +159,14 @@ async function renderPortfolio() {
       <div class="hold-meta"><span class="stars">${'★'.repeat(h.conviction || 0)}<s>${'★'.repeat(5 - (h.conviction || 0))}</s></span><span class="grow"></span>${p ? `<span class="${cls(p.pnlPct)}">${pc(p.pnlPct)}</span>` : '<span>pending</span>'}</div>
       <div class="why">${esc(h.thesis)}<em><b>Sell if</b> ${esc(h.rotate_if)}</em><em>Backed by ${esc((h.champions || []).join(', ') || '—')}</em></div></div>`; }).join('');
   $$('#pf-list .hold').forEach((el) => (el.onclick = () => el.classList.toggle('open')));
-  $('#pf-watch').classList.toggle('hidden', !allowRun);
+  $('#pf-watch').classList.toggle('hidden', !demo && !S.hasKey);
   $('#pf-watchlog').innerHTML = (P.watch || []).slice(0, 6).map((w) => `<div class="wl"><small>${when(w.at)}${w.convene ? ' · called for a session' : ''}</small>${esc(w.statement)}</div>`).join('');
 }
-$('#pf-watch').onclick = async () => { $('#pf-watch').disabled = true; try { const r = await api('/api/watch', { method: 'POST', body: { demo }, timeout: 180000 }); if (r.error) throw new Error(r.error); toast(r.statement || 'Watch complete'); renderPortfolio(); } catch (e) { toast(e.message, true); } finally { $('#pf-watch').disabled = false; } };
+$('#pf-watch').onclick = async () => { $('#pf-watch').disabled = true; try { const r = await OC.watch(demo); if (r.error) throw new Error(r.error); toast(r.statement || 'Watch complete'); renderPortfolio(); } catch (e) { toast(e.message, true); } finally { $('#pf-watch').disabled = false; } };
 
 /* ── Record ──────────────────────────────────────────────────────────── */
-async function renderRecord() {
-  try { P = await api('/api/portfolio' + q()); } catch { P = LS.get('pf' + demo, null); if (!P) return; }
+function renderRecord() {
+  P = OC.portfolio(demo); P.verify = OC.verify(demo);
   const st = P.stats, ser = P.series;
   $('#rc-kpis').innerHTML = st && ser.length > 1 ? [['Council', pc(st.ret), `${st.days} trading days`], ['Nasdaq 100', pc(st.qqq), `council ${pc(st.ret - st.qqq)} vs it`], ['S&P 500', pc(st.spy), `council ${pc(st.ret - st.spy)} vs it`], ['Max drawdown', pc(st.maxDD), `Sharpe ${st.sharpe == null ? '—' : st.sharpe.toFixed(2)}`]]
     .map(([a, b, c]) => `<div class="kpi"><div class="eyebrow">${a}</div><div class="num">${b}</div><small>${c}</small></div>`).join('') : '<div class="kpi" style="grid-column:1/-1"><div class="eyebrow">No record yet</div><small>It starts at the first open after the first decision.</small></div>';
@@ -202,14 +188,14 @@ function chart(ser, cap) {
 }
 
 /* ── Sessions ────────────────────────────────────────────────────────── */
-async function renderSessions() {
-  let list; try { list = await api('/api/sessions' + q()); } catch (e) { $('#ss-list').innerHTML = `<p class="fine">${esc(e.message)}</p>`; return; }
-  $('#ss-list').innerHTML = list.map((s) => `<div class="ss" data-id="${esc(s.id)}"><div class="ss-t"><b>${when(s.startedAt)}</b><span class="tag ${s.status}">${s.status === 'done' ? esc(S.presets[s.preset]?.label || s.preset) : esc(s.status)}</span>${s.demo ? '<span class="tag demo">demo</span>' : ''}</div><p>${s.status === 'done' ? `${s.holdings} holdings · confidence ${s.confidence} · ${money(s.cost)}` : esc(s.error || '')}</p>${s.summary ? `<p>${esc(s.summary)}</p>` : ''}</div>`).join('') || '<p class="fine center">No sessions yet.</p>';
+function renderSessions() {
+  const list = OC.sessions(demo);
+  $('#ss-list').innerHTML = list.map((s) => `<div class="ss" data-id="${esc(s.id)}"><div class="ss-t"><b>${when(s.startedAt)}</b><span class="tag ${s.status}">${s.status === 'done' ? esc(S.presets[s.preset]?.label || s.preset) : esc(s.status)}</span>${s.demo ? '<span class="tag demo">demo</span>' : ''}</div><p>${s.status === 'done' ? `${s.holdings} holdings · confidence ${s.confidence} · ${money(s.cost)}${s.device ? ' · ' + esc(s.device) : ''}` : esc(s.error || '')}</p>${s.summary ? `<p>${esc(s.summary)}</p>` : ''}</div>`).join('') || '<p class="fine center">No sessions yet.</p>';
   $$('#ss-list .ss').forEach((el) => (el.onclick = () => detail(el.dataset.id)));
 }
-async function detail(id) {
-  show('session'); $('#ss-detail').innerHTML = '<p class="fine">Loading…</p>';
-  const s = await api('/api/session?id=' + encodeURIComponent(id)).catch(() => null);
+function detail(id) {
+  show('session');
+  const s = OC.session(id);
   if (!s) return ($('#ss-detail').innerHTML = '<p class="fine">Could not load it.</p>');
   const blk = (k, d, extra = '') => { const m = SEAT[k] || { name: k, role: '', color: '#999' }; return `<div class="tr" style="--c:${m.color}"><div class="m"><b style="color:${m.color}">${esc(m.name)}</b> · ${esc(m.role)}</div><p>${esc(d.statement || '')}</p>${extra}${d.picks ? `<div class="chips">${d.picks.slice().sort((a, b) => b.weight - a.weight).map((p) => `<span class="chip"><b>${esc(p.ticker)}</b> ${fw(p.weight)}</span>`).join('')}</div>` : ''}</div>`; };
   let h = `<div class="head"><div class="eyebrow">${esc(S.presets[s.preset]?.label || s.preset)}${s.demo ? ' · demo' : ''} · ${money(s.cost)}</div><h2 style="font-size:22px">${when(s.startedAt)}</h2></div>`;
@@ -284,11 +270,48 @@ const Ch = (() => {
   };
 })();
 
+/* ── Settings ────────────────────────────────────────────────────────── */
+function renderSettings() {
+  S = OC.state(); const st = S.settings, y = S.sync || {};
+  $('#k-state').innerHTML = S.hasKey ? '<span class="pill ok">Saved on this phone</span>' : '<span class="pill bad">Not set</span>';
+  $('#k-in').placeholder = S.hasKey ? 'Saved. Paste a new key to replace it' : 'sk-ant-...';
+  $('#k-clear').classList.toggle('hidden', !S.hasKey);
+  if (document.activeElement !== $('#y-repo')) $('#y-repo').value = st.syncRepo || '';
+  if (document.activeElement !== $('#y-dev')) $('#y-dev').value = st.device || '';
+  $('#y-tok').placeholder = S.hasToken ? 'Saved. Paste to replace' : 'github_pat_...';
+  $('#y-state').innerHTML = !y.on ? '<span class="pill">Off</span>' : y.error ? '<span class="pill bad">Error</span>' : '<span class="pill ok">Connected</span>';
+  $('#y-info').innerHTML = !y.on ? 'Not set up. With the same repository and token on the PC and here, both apps are one council.' : y.error ? `<span class="down">${esc(y.error)}</span>` : `Last synced ${y.last ? when(y.last) : 'never'} as ${esc(y.device)}.`;
+  $('#d-preset').innerHTML = ['low', 'normal', 'high'].map((k) => `<button data-k="${k}" class="${st.preset === k ? 'on' : ''}">${S.presets[k].label}<small>~${money(S.presets[k].est.mid)}</small></button>`).join('');
+  $$('#d-preset button').forEach((b) => (b.onclick = () => saveS({ preset: b.dataset.k })));
+  if (document.activeElement !== $('#d-sec')) $('#d-sec').value = st.secContact || '';
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  $('#d-sched').textContent = st.schedule.enabled ? `Weekly session ${DAYS[st.schedule.day]} ${String(st.schedule.hour).padStart(2, '0')}:${String(st.schedule.minute).padStart(2, '0')}, run by whichever device is on. Change it on the PC.` : 'The weekly session is off. Turn it on in the PC app.';
+  $('#d-spent').textContent = money(S.spentThisMonth);
+  $('#d-ver').textContent = `Oazy Council ${S.version} for Android`;
+}
+function saveS(patch) { OC.setSettings(patch); if (patch.preset) preset = patch.preset; renderSettings(); renderIdle(); toast('Saved'); }
+$('#k-save').onclick = () => {
+  const v = $('#k-in').value.trim(); if (!v) return toast('Paste the key first.', true);
+  if (!/^sk-ant-/.test(v)) return toast('That does not look like an Anthropic API key (sk-ant-…).', true);
+  OC.setSecret('anthropicKey', v); $('#k-in').value = ''; refresh(); renderSettings(); toast('Key saved, encrypted on this phone.');
+};
+$('#k-clear').onclick = () => { OC.setSecret('anthropicKey', ''); refresh(); renderSettings(); toast('Key removed from this phone.'); };
+$('#y-repo').onchange = (e) => { saveS({ syncRepo: e.target.value.trim() }); syncNowUI(); };
+$('#y-dev').onchange = (e) => saveS({ device: e.target.value.trim().slice(0, 40) });
+$('#y-save').onclick = () => { const v = $('#y-tok').value.trim(); if (!v) return toast('Paste the token first.', true); OC.setSecret('syncToken', v); $('#y-tok').value = ''; renderSettings(); syncNowUI(); };
+$('#y-now').onclick = () => syncNowUI();
+$('#d-sec').onchange = (e) => saveS({ secContact: e.target.value.trim().slice(0, 120) });
+$$('[data-url]').forEach((a) => (a.onclick = (e) => { e.preventDefault(); window.Native?.openUrl ? window.Native.openUrl(a.dataset.url) : window.open(a.dataset.url); }));
+async function syncNowUI() {
+  $('#y-info').textContent = 'Syncing…';
+  const r = await OC.syncNow(); refresh(); renderSettings();
+  toast(r.off ? 'Fill in the repository and token first.' : r.error ? 'Sync failed: ' + r.error : 'Synced', !!r.error);
+}
+
 /* Android back button: step back inside the app, or tell the shell to leave. */
 window.ocBack = () => {
-  if (!$('#pair').classList.contains('hidden') && host && code) { start(); return true; }
   if (screen === 'session') { show('sessions'); return true; }
   if (screen !== 'council') { show('council'); return true; }
   return false;
 };
-if (host && code) start(); else showPair();
+start();

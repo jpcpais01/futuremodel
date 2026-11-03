@@ -10,10 +10,11 @@ PLAT=$(ls -d "$SDK"/platforms/android-* | sort -V | tail -1)/android.jar
 KS=${OC_KEYSTORE:-$HOME/.oazy-council.keystore}
 PASS=${OC_KEYPASS:-oazycouncil}
 OUT=build; rm -rf $OUT; mkdir -p $OUT/assets/www $OUT/classes $OUT/compiled
+node ../phone/build.js >/dev/null   # the council engine for the phone, into mobile/core.bundle.js
 cp -r ../mobile/. $OUT/assets/www/
 "$BT/aapt2" compile --dir res -o $OUT/compiled/res.zip
-"$BT/aapt2" link -o $OUT/base.apk -I "$PLAT" --manifest AndroidManifest.xml -A $OUT/assets $OUT/compiled/res.zip --auto-add-overlay
-javac -source 11 -target 11 -nowarn -classpath "$PLAT" -d $OUT/classes src/com/oazy/council/*.java
+"$BT/aapt2" link -o $OUT/base.apk -I "$PLAT" --manifest AndroidManifest.xml -A $OUT/assets $OUT/compiled/res.zip --auto-add-overlay --java $OUT/gen
+javac -source 11 -target 11 -nowarn -classpath "$PLAT" -d $OUT/classes src/com/oazy/council/*.java $(find $OUT/gen -name '*.java')
 "$BT/d8" --min-api 24 --lib "$PLAT" --output $OUT $(find $OUT/classes -name '*.class')
 (cd $OUT && zip -q base.apk classes.dex)
 "$BT/zipalign" -f -p 4 $OUT/base.apk $OUT/aligned.apk

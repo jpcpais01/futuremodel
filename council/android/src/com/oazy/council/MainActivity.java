@@ -5,13 +5,14 @@ import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.WindowManager;
 import android.view.WindowInsets;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
-/* A thin shell around the Oazy Council phone screens, which live in assets/www. */
+/* The Oazy Council phone app: its screens and the council engine live in assets/www; Native gives them storage, network and the keystore. */
 public class MainActivity extends Activity {
   private WebView web;
 
@@ -40,14 +41,18 @@ public class MainActivity extends Activity {
       }
       return in;
     });
+    web.addJavascriptInterface(new Native(this, web), "Native");
     setContentView(web);
+    CouncilService.channels(this);
+    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED)
+      requestPermissions(new String[] { "android.permission.POST_NOTIFICATIONS" }, 1);
     // Android 13+ delivers the back gesture here (and only here when targeting Android 16).
     if (Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::back);
-    if (state != null) web.restoreState(state);
-    else web.loadUrl("file:///android_asset/www/index.html");
+    web.loadUrl("file:///android_asset/www/index.html");
   }
 
-  @Override protected void onSaveInstanceState(Bundle out) { super.onSaveInstanceState(out); web.saveState(out); }
+  void keepScreenOn(boolean on) { if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); }
+
 
   @Override public void onBackPressed() { back(); }
 

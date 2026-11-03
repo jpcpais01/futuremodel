@@ -125,4 +125,16 @@ function stats(series, capital) {
   };
 }
 
-module.exports = { events, append, verify, ensureGenesis, recordDecision, replay, fillDate, etParts };
+/* Puts entries written elsewhere on top of a chain, re-linking each one. Used when two devices recorded at the same time. */
+function chainOnto(base, extras) {
+  const out = [...base], hasGenesis = base.some((e) => e.type === 'genesis');
+  for (const e of extras) {
+    if (e.type === 'genesis' && (hasGenesis || out.length)) continue;
+    const { hash, prev, seq, ...rest } = e;
+    const body = { ...rest, seq: out.length, prev: out.length ? out[out.length - 1].hash : '0'.repeat(64) };
+    out.push({ ...body, hash: hashOf(body) });
+  }
+  return out;
+}
+
+module.exports = { events, append, verify, ensureGenesis, recordDecision, replay, fillDate, etParts, chainOnto, hashOf };

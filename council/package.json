@@ -1,7 +1,7 @@
 {
   "name": "oazy-council",
   "productName": "Oazy Council",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "An AI investment council that always holds the best portfolio it can find",
   "author": "Oazy",
   "main": "main.js",
@@ -15,14 +15,16 @@
     "estimate": "node engine/cli.js estimate",
     "test": "node test/run.js",
     "dist": "electron-builder --win nsis portable",
-    "apk": "bash android/build.sh"
+    "apk": "bash android/build.sh",
+    "bundle": "node phone/build.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0"
   },
   "devDependencies": {
     "electron": "^45.2.1",
-    "electron-builder": "^26.18.0"
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.25.10"
   },
   "build": {
     "appId": "com.oazy.council",
@@ -32,7 +34,6 @@
       "preload.js",
       "engine/**",
       "app/**",
-      "mobile/**",
       "package.json",
       "!**/*.map"
     ],

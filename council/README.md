@@ -5,7 +5,9 @@ A council of Claude agents that tries to always hold the best portfolio it can f
 It has three parts:
 
 - A **desktop app** for Windows (Electron) with a live view of the council chamber.
-- A **phone app** for Android that follows the council over your home Wi-Fi.
+- A **phone app** for Android that runs the council on its own, with your API key pasted in the app.
+
+The PC and the phone are one account: the same portfolio, ledger, sessions and settings on both, kept in sync through a private GitHub repository you own.
 - A **command line** for running sessions from scripts or Task Scheduler.
 
 ## How a session works
@@ -80,11 +82,25 @@ schtasks /Create /SC WEEKLY /D SUN /ST 20:00 /TN "Oazy Council" /TR "cmd /c cd /
 
 ## Phone app (Android)
 
-1. On the PC, open **Settings, then Phone link**, and turn it on. It shows the address (for example `http://192.168.1.20:7717`) and a pairing code. The first time, Windows asks whether to allow Oazy Council on private networks: allow it.
-2. Install `OazyCouncil.apk` on the phone. Android will ask you to allow installs from your file manager or browser.
-3. Open it and enter the address and the code.
+The phone app does not need the PC. It runs the same council engine on the phone, with your own API key.
 
-On the phone you can watch sessions live, see the portfolio, the record and every transcript, and (if allowed in Settings) convene the council or run the watch. The phone only connects over your local network, and every request needs the pairing code. "New code" in Settings disconnects every paired phone. You can also open the address in the phone's browser instead of installing the APK.
+1. Install `OazyCouncil.apk`. Android will ask you to allow installs from your file manager or browser.
+2. Open **Settings** in the app and paste your Anthropic API key. It is encrypted with the phone's keystore, never synced, and only sent to Anthropic.
+3. Fill in the account (below) to share everything with the PC.
+
+While a session runs, the phone keeps the screen on and shows a notification so Android does not stop it. The weekly session is run by whichever device is on at the time: the PC runs it on its own; if the PC was off, the phone shows "This week's session is due" with a button to convene it. The phone runs the cheap daily watch whenever it is open and the watch is owed.
+
+## One account on the PC and the phone
+
+Both apps keep the shared record in a private GitHub repository. Set it up once:
+
+1. Create a **private** repository, for example `oazy-council-data`. Leave it empty.
+2. Create a fine-grained token at github.com, Settings, Developer settings, Personal access tokens, Fine-grained tokens. Give it access to **only that repository**, with **Contents: Read and write**. Nothing else.
+3. In the PC app (**Settings, Account sync**) and in the phone app (**Settings, Account**), enter `you/oazy-council-data` and paste the token.
+
+What is shared: the ledger, the watch log, every session transcript, the shared settings (budget, schedule, watch, SEC contact) and a live status. What is never shared: API keys, the token itself, and the market-data caches. When one device is in session, the other shows "In session on ..." with the current step and will not start a second session; its result arrives when it ends. If both devices record a decision while apart, the ledger chains are joined, so nothing is lost and the hash chain still verifies.
+
+The token is encrypted on each device (Windows protection on the PC, the keystore on the phone). If it leaks, delete it on GitHub and make a new one.
 
 To rebuild the APK, you need the Android SDK (build-tools and a platform) and a JDK:
 
@@ -111,11 +127,12 @@ The app and the command line share one data folder: `%APPDATA%\Oazy Council\data
 ## Layout
 
 ```
-main.js, preload.js     the desktop app: window, tray, scheduler, phone link
+main.js, preload.js     the desktop app: window, tray, scheduler
 app/                    the desktop window (chamber, portfolio, record, sessions, settings)
-mobile/                 the phone screens (served by the phone link, bundled into the APK)
+mobile/                 the phone screens and core.bundle.js (the engine built for the phone)
+phone/                  the phone's engine entry and its small Node shims; `node phone/build.js` rebuilds the bundle
 android/                the Android shell and its build script
-engine/                 data, metrics, prompts, the session, rules, ledger, watch, CLI
+engine/                 data, metrics, prompts, the session, rules, ledger, watch, account sync (sync.js), the shared core (core.js), CLI
 test/                   offline tests
 ```
 

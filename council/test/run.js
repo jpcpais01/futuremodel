@@ -1,10 +1,11 @@
-// Offline checks of the parts that must never be wrong: limits, the ledger, the numbers, the phone link.
+// Offline checks of the parts that must never be wrong: limits, the ledger, the numbers, account sync.
 'use strict';
 const os = require('os'), path = require('path'), fs = require('fs'), assert = require('assert');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-test-'));
 const store = require('../engine/store'); store.setRoot(tmp);
 const rules = require('../engine/rules'), ledger = require('../engine/ledger'), M = require('../engine/metrics');
-const sec = require('../engine/data/sec'), llm = require('../engine/llm'), phone = require('../engine/phone');
+const sec = require('../engine/data/sec'), llm = require('../engine/llm'), sync = require('../engine/sync');
+const { fakeGitHub } = require('./fake-github');
 const B = require('../engine/book'), C = require('../engine/config'), session = require('../engine/session');
 let n = 0, failed = 0;
 async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name); } catch (e) { failed++; console.log('  FAIL ' + name + '\n       ' + e.message); } }
@@ -69,17 +70,68 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name)
   await t('cost estimates are ordered low < normal < high', () => {
     const e = ['low', 'normal', 'high'].map((k) => session.estimate(k).mid); assert.ok(e[0] < e[1] && e[1] < e[2], e.join(' '));
   });
-  await t('phone link: pairing code required, wrong codes locked out', async () => {
-    const code = phone.newCode(); assert.match(code, /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
-    phone.start({ port: 17717, code: () => code, allowRun: () => false, api: { state: () => ({ ok: 1 }) } });
-    await new Promise((r) => setTimeout(r, 200));
-    const get = (p, h = {}) => fetch('http://127.0.0.1:17717' + p, { headers: h });
-    assert.strictEqual((await get('/api/state')).status, 401);
-    assert.strictEqual((await get('/api/state', { 'x-council-code': code.toLowerCase().replace(/-/g, ' ') })).status, 200);
-    assert.strictEqual((await fetch('http://127.0.0.1:17717/api/run', { method: 'POST', headers: { 'x-council-code': code }, body: '{}' })).status, 403);
-    for (let i = 0; i < 10; i++) await get('/api/state', { 'x-council-code': 'nope' });
-    assert.strictEqual((await get('/api/state', { 'x-council-code': code })).status, 429);
-    phone.stop();
+  await t('sync merge: ledgers re-link, logs union, nothing lost', () => {
+    const mk = (file, evs) => { for (const e of evs) ledger.append(e, file); return store.readLines(file); };
+    const base = mk('m-base.jsonl', [{ type: 'genesis', capital: 1e5 }, { type: 'decision', target: { A: 50 }, at: '2026-01-01T00:00:00Z' }]);
+    store.writeLines('m-a.jsonl', base); store.writeLines('m-b.jsonl', base);
+    const A = mk('m-a.jsonl', [{ type: 'decision', target: { B: 50 }, at: '2026-01-02T00:00:00Z' }]);
+    const Bl = mk('m-b.jsonl', [{ type: 'decision', target: { C: 50 }, at: '2026-01-03T00:00:00Z' }]);
+    const ext = sync.mergeLedger(base, A); assert.ok(ext.push); assert.strictEqual(ext.out, A);           // pure extension: taken as is
+    const m = sync.mergeLedger(A, Bl); store.writeLines('m-out.jsonl', m.out);
+    assert.strictEqual(m.out.length, 4); assert.ok(ledger.verify('m-out.jsonl').ok, 'merged chain must verify');
+    assert.deepStrictEqual(m.out.slice(2).map((e) => Object.keys(e.target)[0]), ['B', 'C']);
+    assert.strictEqual(sync.mergeLedger(m.out, A).push, false);                                              // already have everything
+    const g = sync.mergeLedger([], [{ type: 'genesis', hash: 'x' }]); assert.strictEqual(g.out.length, 1);
+    const lg = sync.mergeLog([{ at: '2', s: 'b' }, { at: '1', s: 'a' }], [{ at: '3', s: 'c' }, { at: '1', s: 'a' }]);
+    assert.deepStrictEqual(lg.out.map((x) => x.s), ['a', 'b', 'c']); assert.ok(lg.push);
+  });
+  await t('account sync: two devices share one ledger, sessions, settings and live status', async () => {
+    const gh = await fakeGitHub(17718), api = 'http://127.0.0.1:17718';
+    const dA = path.join(tmp, 'devA'), dB = path.join(tmp, 'devB');
+    const as = (root, device) => { store.setRoot(root); sync.configure({ repo: 'me/oazy-council-data', token: 'test-token', device, api }); };
+    try {
+      as(dA, 'PC');
+      ledger.recordDecision({ id: 'S-20261101-1', preset: 'normal', final: { cash_pct: 10, holdings: [{ ticker: 'NVDA', weight: 90 }] } });
+      store.writeJSON('sessions/S-20261101-1.json', { id: 'S-20261101-1', status: 'done', device: 'PC', startedAt: '2026-11-01T20:00:00Z' });
+      store.writeJSON('sessions/S-20261102-1.json', { id: 'S-20261102-1', status: 'running' });   // unfinished: stays local
+      store.writeJSON('shared.json', { preset: 'high', updatedAt: 1000 });
+      await sync.pull();
+      assert.ok(gh.files.has('ledger.jsonl') && gh.files.has('sessions/S-20261101-1.json') && gh.files.has('shared.json'));
+      assert.ok(!gh.files.has('sessions/S-20261102-1.json'));
+
+      as(dB, 'Phone');
+      const r = await sync.pull(); assert.ok(r.changed);
+      assert.strictEqual(store.readLines('ledger.jsonl').length, 2); assert.ok(ledger.verify().ok);
+      assert.strictEqual(store.readJSON('sessions/S-20261101-1.json').device, 'PC');
+      assert.strictEqual(store.readJSON('shared.json').preset, 'high');
+      // The phone decides and logs a watch, the PC logs its own watch, both offline.
+      ledger.recordDecision({ id: 'S-20261108-1', preset: 'low', final: { cash_pct: 0, holdings: [{ ticker: 'MSFT', weight: 100 }] } });
+      store.appendLine('watch.jsonl', { at: '2026-11-04T22:30:00Z', statement: 'phone watch' });
+      store.writeJSON('shared.json', { preset: 'low', updatedAt: 2000 });
+      store.setRoot(dA); store.appendLine('watch.jsonl', { at: '2026-11-03T22:30:00Z', statement: 'pc watch' });
+      as(dB, 'Phone'); await sync.pull();
+      as(dA, 'PC'); await sync.pull();
+      assert.strictEqual(store.readLines('ledger.jsonl').length, 3); assert.ok(ledger.verify().ok);
+      assert.deepStrictEqual(store.readLines('watch.jsonl').map((w) => w.statement), ['pc watch', 'phone watch']);
+      assert.strictEqual(store.readJSON('shared.json').preset, 'low');
+      // Both devices decide while apart: the chains are joined, nothing is dropped, both still verify.
+      ledger.recordDecision({ id: 'S-A', preset: 'low', final: { cash_pct: 0, holdings: [{ ticker: 'AAA', weight: 100 }] } });
+      store.setRoot(dB); ledger.recordDecision({ id: 'S-B', preset: 'low', final: { cash_pct: 0, holdings: [{ ticker: 'BBB', weight: 100 }] } });
+      as(dA, 'PC'); await sync.pull(); as(dB, 'Phone'); await sync.pull(); as(dA, 'PC'); await sync.pull();
+      const la = store.readLines('ledger.jsonl'); store.setRoot(dB); const lb = store.readLines('ledger.jsonl');
+      assert.strictEqual(la.length, 5); assert.deepStrictEqual(la.map((e) => e.hash), lb.map((e) => e.hash));
+      assert.ok(ledger.verify().ok); assert.deepStrictEqual(la.slice(3).map((e) => e.session).sort(), ['S-A', 'S-B']);
+      // A quiet second pull downloads and uploads nothing.
+      const before = gh.puts(); await sync.pull(); assert.strictEqual(gh.puts(), before);
+      // Live status: the phone sees the PC in session, the PC does not see itself.
+      as(dA, 'PC'); await sync.setLive({ active: true, id: 'S-X', phase: { label: 'Debate' } }, true);
+      assert.strictEqual(await sync.getLive(), null);
+      as(dB, 'Phone'); const l = await sync.getLive(); assert.strictEqual(l?.device, 'PC'); assert.strictEqual(l.phase.label, 'Debate');
+      as(dA, 'PC'); await sync.setLive(null, true); as(dB, 'Phone'); assert.strictEqual(await sync.getLive(), null);
+      // A wrong token is reported plainly.
+      sync.configure({ repo: 'me/oazy-council-data', token: 'nope', device: 'Phone', api });
+      await assert.rejects(sync.pull(), /token is wrong/);
+    } finally { gh.close(); sync.configure(null); store.setRoot(tmp); }
   });
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(`\n${n} passed, ${failed} failed`);

@@ -39,6 +39,7 @@ async function boot() {
   });
   if (S.running) { beginSession({ id: S.running.id, preset: S.running.preset, demo: S.running.demo, members: Object.keys(S.seats), officers: Object.keys(S.officers), phases: [] }); $('#core-phase').textContent = 'The council is in session'; }
   idleCore();
+  watchElsewhere(); setInterval(watchElsewhere, 30e3);
 }
 
 function wireChrome() {
@@ -86,9 +87,10 @@ function renderConvene() {
   }).join('');
   $$('#presets .preset').forEach((b) => (b.onclick = () => { presetSel = b.dataset.k; renderConvene(); }));
   const w = $('#keywarn');
-  if (!demo && !S.hasKey) { w.classList.remove('hidden'); w.innerHTML = 'No API key found. Set the <code>ANTHROPIC_API_KEY</code> environment variable and restart the app (see Settings), or tick Demo run to watch the council work for free.'; }
+  if (!demo && elsewhere) { w.classList.remove('hidden'); w.innerHTML = `The council is in session on <b>${esc(elsewhere.device)}</b> (${esc(elsewhere.phase?.label || 'convening')}). Its decision syncs here when it ends. Demo runs still work.`; }
+  else if (!demo && !S.hasKey) { w.classList.remove('hidden'); w.innerHTML = 'No API key found. Set the <code>ANTHROPIC_API_KEY</code> environment variable and restart the app (see Settings), or tick Demo run to watch the council work for free.'; }
   else w.classList.add('hidden');
-  $('#go').disabled = (!demo && !S.hasKey) || !!S.running;
+  $('#go').disabled = (!demo && (!S.hasKey || !!elsewhere)) || !!S.running;
   $('#go').textContent = demo ? 'Convene (demo)' : 'Convene';
   const show = !sess && !replay;
   $('#convene').classList.toggle('hidden', !show || !$('#verdict').classList.contains('hidden'));
@@ -102,10 +104,25 @@ async function convene() {
   if (r?.error) { toast(r.error, true); if (sess && !sess.ended) endSession(true); renderConvene(); }
 }
 
+let elsewhere = null;
 function idleCore() {
   const n = S.next?.session;
+  if (elsewhere) {
+    $('#core-phase').textContent = `In session on ${elsewhere.device}`;
+    $('#core-sub').textContent = (elsewhere.phase?.label || 'Convening') + (elsewhere.last?.text ? ' · ' + elsewhere.last.text.slice(0, 120) : '');
+    return;
+  }
   $('#core-phase').textContent = 'The council is adjourned';
   $('#core-sub').textContent = n ? 'Next session ' + when(n) : 'No session scheduled';
+}
+/* While another device holds the session, show where it is up to, and pick up its result when it ends. */
+async function watchElsewhere() {
+  if (!S?.sync?.on || sess || S.running) return;
+  const l = await council.remoteLive().catch(() => null), was = elsewhere;
+  elsewhere = l;
+  if (was && !l) { await council.syncNow(); S = await council.state(); if (view !== 'chamber') show(view); }
+  if (!sess) idleCore();
+  renderConvene();
 }
 
 /* ── Session display ──────────────────────────────────────────────────── */
@@ -508,13 +525,14 @@ async function sessionDetail(id) {
 }
 
 /* ── Settings ────────────────────────────────────────────────────────── */
-async function renderPhone() {
-  if (!council.phoneInfo) return;
-  const p = await council.phoneInfo();
-  $('#st-ph-on').checked = p.enabled; $('#st-ph-run').checked = p.allowRun;
-  $('#st-ph').classList.toggle('hidden', !p.enabled);
-  $('#st-ph-code').textContent = p.code;
-  $('#st-ph-addr').innerHTML = p.error ? `<span class="bad">${esc(p.error)}</span>` : (p.addresses || []).map((a) => `<div>${esc(a.url)} <span class="dim">${esc(a.name)}</span></div>`).join('') || '<span class="dim">No local network found.</span>';
+function renderSync() {
+  const y = S.sync || {}, st = S.settings;
+  $('#st-sy-state').innerHTML = y.on ? (y.error ? '<span class="pill bad">Error</span>' : '<span class="pill ok">Connected</span>') : '<span class="pill">Off</span>';
+  if (document.activeElement !== $('#st-sy-repo')) $('#st-sy-repo').value = st.syncRepo || '';
+  if (document.activeElement !== $('#st-sy-dev')) $('#st-sy-dev').value = st.device || '';
+  $('#st-sy-token').placeholder = S.hasToken ? 'saved (paste to replace)' : 'github_pat_...';
+  $('#st-sy-info').innerHTML = !y.on ? 'Not set up. Fill in the repository and token, on both the PC and the phone.'
+    : y.error ? `<span class="bad">${esc(y.error)}</span>` : `Last synced ${y.last ? when(y.last) : 'never'} as ${esc(y.device)}.`;
 }
 function renderSettings() {
   if (!S) return; const st = S.settings;
@@ -533,7 +551,7 @@ function renderSettings() {
   $('#st-presets').innerHTML = ['low', 'normal', 'high'].map((k) => { const p = S.presets[k];
     return `<div class="ps-row"><b>${p.label}</b><div>${esc(p.blurb)}<br><span class="dim">${p.members.map((m) => SEAT[m].name).join(', ')}${p.redTeam ? ' + Vex' : ''} + Sentinel + Arbiter · about ${p.est.calls} calls</span></div><div class="num r" style="text-align:right">${money(p.est.mid)}<div class="dim" style="font-size:11px">${money(p.est.low)} to ${money(p.est.high)}</div></div></div>`; }).join('');
   $('#st-ver').textContent = `Oazy Council ${S.version || ''} · next session ${S.next.session ? when(S.next.session) : 'not scheduled'} · next watch ${S.next.watch ? when(S.next.watch) : 'off'}`;
-  renderPhone();
+  renderSync();
   if (!renderSettings.wired) {
     renderSettings.wired = true;
     $('#st-sch-on').onchange = (e) => save({ schedule: { enabled: e.target.checked } });
@@ -546,11 +564,17 @@ function renderSettings() {
     $('#st-tray').onchange = (e) => save({ tray: e.target.checked });
     $('#st-sec').onchange = (e) => save({ secContact: e.target.value.trim().slice(0, 120) });
     $('#st-open').onclick = () => council.openData();
-    $('#st-ph-on').onchange = (e) => save({ phone: { enabled: e.target.checked } });
-    $('#st-ph-run').onchange = (e) => save({ phone: { allowRun: e.target.checked } });
-    $('#st-ph-new').onclick = async () => { await council.phoneNewCode(); renderPhone(); toast('New code. Paired phones must enter it again.'); };
+    $('#st-sy-repo').onchange = (e) => save({ syncRepo: e.target.value.trim() }).then(syncNow);
+    $('#st-sy-dev').onchange = (e) => save({ device: e.target.value.trim().slice(0, 40) });
+    $('#st-sy-save').onclick = async () => { const v = $('#st-sy-token').value.trim(); if (!v) return; const r = await council.setSecret('syncToken', v); if (r?.error) return toast(r.error, true); S = r; $('#st-sy-token').value = ''; renderSettings(); syncNow(); };
+    $('#st-sy-now').onclick = syncNow;
   }
 }
-async function save(patch) { S = await council.setSettings(patch); if (patch.preset) presetSel = patch.preset; renderSettings(); renderConvene(); if (!sess) idleCore(); toast('Saved'); }
+async function syncNow() {
+  $('#st-sy-info').textContent = 'Syncing…';
+  const r = await council.syncNow(); S = await council.state(); renderSettings();
+  toast(r.off ? 'Sync is not set up' : r.error ? 'Sync failed' : 'Synced');
+}
+async function save(patch) { const r = await council.setSettings(patch); if (r?.error) return toast(r.error, true); S = r; if (patch.preset) presetSel = patch.preset; renderSettings(); renderConvene(); if (!sess) idleCore(); toast('Saved'); }
 
 boot().catch((e) => { document.body.insertAdjacentHTML('beforeend', `<div class="warn" style="position:fixed;top:60px;left:20px">${esc(e.stack || e.message)}</div>`); });

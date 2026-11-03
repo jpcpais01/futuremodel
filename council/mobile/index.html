@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src http: https:; object-src 'none'; base-uri 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https:; object-src 'none'; base-uri 'none'">
   <meta name="theme-color" content="#06070c">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.png">
@@ -13,22 +13,8 @@
 <body>
   <div id="bg"></div>
 
-  <!-- Pairing -->
-  <section id="pair" class="screen hidden">
-    <div class="pair-box">
-      <div class="mark big"></div>
-      <h1>Oazy <b>Council</b></h1>
-      <p class="lede">Connect to the council running on your PC. Turn on <em>Phone link</em> in the desktop app's Settings, then enter the address and code it shows.</p>
-      <label>Address<input id="p-host" type="url" inputmode="url" placeholder="http://192.168.1.20:7717" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-      <label>Pairing code<input id="p-code" type="text" placeholder="ABCD-EFGH-JKLM" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
-      <button id="p-go" class="primary wide">Connect</button>
-      <p id="p-err" class="err"></p>
-      <p class="fine">Your phone and PC need to be on the same Wi-Fi. The first time, Windows may ask whether to allow Oazy Council on private networks: allow it.</p>
-    </div>
-  </section>
-
   <!-- App -->
-  <div id="app" class="hidden">
+  <div id="app">
     <header id="top">
       <div class="brand"><span class="mark"></span><span>Oazy <b>Council</b></span></div>
       <span class="grow"></span>
@@ -50,9 +36,14 @@
           <button id="l-cancel" class="ghost wide hidden">Adjourn the session</button>
         </div>
         <div id="idle">
+          <div id="due" class="card due hidden">
+            <div class="eyebrow">This week's session is due</div>
+            <p>No device has run it yet. Convene now with your default budget, or wait for the PC.</p>
+            <button id="due-go" class="primary wide">Convene the weekly session</button>
+          </div>
           <div id="last" class="card"></div>
           <div id="conv" class="card">
-            <div class="eyebrow">Convene from the phone</div>
+            <div class="eyebrow">Convene</div>
             <div id="presets" class="presets"></div>
             <label class="check"><input type="checkbox" id="demo"><span></span>Demo run, free</label>
             <button id="go" class="primary wide">Convene</button>
@@ -89,6 +80,34 @@
         <button id="ss-back" class="back">‹ Sessions</button>
         <div id="ss-detail"></div>
       </section>
+      <!-- Settings -->
+      <section id="s-settings" class="screen">
+        <div class="head"><div class="eyebrow">This phone</div><h2>Settings</h2></div>
+        <div class="card set">
+          <div class="set-h"><b>Anthropic API key</b><span id="k-state"></span></div>
+          <p class="fine">The council runs on this phone with your own key. It is encrypted with the phone's keystore, never synced, and only ever sent to Anthropic. Create or rotate keys at <a href="#" data-url="https://console.anthropic.com/settings/keys">console.anthropic.com</a>.</p>
+          <input id="k-in" type="password" placeholder="sk-ant-..." autocomplete="off" autocapitalize="off" spellcheck="false">
+          <div class="row2"><button id="k-save" class="primary">Save key</button><button id="k-clear" class="ghost hidden">Remove</button></div>
+        </div>
+        <div class="card set">
+          <div class="set-h"><b>Account</b><span id="y-state"></span></div>
+          <p class="fine">Use the same private GitHub repository and token here and on the PC, and the two apps are one council: one portfolio, one ledger, every session on both.</p>
+          <label>Repository<input id="y-repo" type="text" placeholder="you/oazy-council-data" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+          <label>Access token<input id="y-tok" type="password" placeholder="github_pat_..." autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+          <button id="y-save" class="ghost wide">Save token</button>
+          <label>This device's name<input id="y-dev" type="text" autocomplete="off" spellcheck="false"></label>
+          <p id="y-info" class="fine"></p>
+          <button id="y-now" class="ghost wide">Sync now</button>
+        </div>
+        <div class="card set">
+          <div class="set-h"><b>Default budget</b></div>
+          <div id="d-preset" class="seg3"></div>
+          <p id="d-sched" class="fine"></p>
+          <label>SEC contact (optional)<input id="d-sec" type="text" placeholder="Your Name you@example.com" autocomplete="off" spellcheck="false"></label>
+          <div class="set-h" style="margin-top:6px"><span class="fine">Spent this month</span><b id="d-spent" class="num"></b></div>
+        </div>
+        <p id="d-ver" class="fine center"></p>
+      </section>
     </main>
 
     <nav id="tabs">
@@ -96,10 +115,11 @@
       <button data-s="portfolio"><svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5H12z"/><path d="M15 3.8A8.5 8.5 0 0 1 20.2 9H15z"/></svg>Portfolio</button>
       <button data-s="record"><svg viewBox="0 0 24 24"><path d="M3.5 17l5-5 3.5 3 8-8"/><path d="M15 7h5v5"/></svg>Record</button>
       <button data-s="sessions"><svg viewBox="0 0 24 24"><path d="M5 5h14M5 10h14M5 15h9M5 20h6"/></svg>Sessions</button>
-      <button data-s="pair"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg>Link</button>
+      <button data-s="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg>Settings</button>
     </nav>
   </div>
   <div id="toast"></div>
+  <script src="core.bundle.js"></script>
   <script src="mobile.js"></script>
 </body>
 </html>

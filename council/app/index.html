@@ -168,11 +168,11 @@
           <div class="set-row"><div><b>Keep running in the tray</b><p>Closing the window keeps the schedule alive.</p></div><label class="switch"><input type="checkbox" id="st-tray"><span></span></label></div>
         </div>
         <div class="card set">
-          <div class="set-row"><div><b>Phone link</b><p>Lets the Oazy Council phone app follow the chamber and the portfolio over your home Wi-Fi. Only devices on your local network with the pairing code can connect.</p></div><label class="switch"><input type="checkbox" id="st-ph-on"><span></span></label></div>
-          <div id="st-ph" class="hidden">
-            <div class="set-row"><div><b>Pairing</b><p>In the phone app, enter one of these addresses and the code.</p><div id="st-ph-addr" class="mono" style="margin-top:6px"></div></div><div style="text-align:right"><div id="st-ph-code" class="num big mono" style="letter-spacing:.08em"></div><button id="st-ph-new" class="ghost small" style="margin-top:6px">New code</button></div></div>
-            <div class="set-row"><div><b>Phone can convene</b><p>Allow the phone to start sessions and the watch. Real sessions cost money.</p></div><label class="switch"><input type="checkbox" id="st-ph-run"><span></span></label></div>
-          </div>
+          <div class="set-row"><div><b>Account sync</b><p>The PC app and the phone app share one council: the same portfolio, ledger, sessions and settings, kept in a private GitHub repository you own. API keys are never synced.</p></div><div id="st-sy-state"></div></div>
+          <div class="set-row"><div><b>Repository</b><p>owner/name of a private repository, for example <span class="mono">you/oazy-council-data</span>.</p></div><input id="st-sy-repo" type="text" placeholder="owner/oazy-council-data" spellcheck="false"></div>
+          <div class="set-row"><div><b>Access token</b><p>A fine-grained token for that repository only, with Contents: read and write. Encrypted on this computer.</p></div><div class="inline"><input id="st-sy-token" type="password" placeholder="github_pat_..." spellcheck="false" autocomplete="off"><button id="st-sy-save" class="ghost small">Save</button></div></div>
+          <div class="set-row"><div><b>This device</b><p>The name the other device shows when this one is in session.</p></div><input id="st-sy-dev" type="text" spellcheck="false"></div>
+          <div class="set-row"><div><b>Status</b><p id="st-sy-info"></p></div><button id="st-sy-now" class="ghost">Sync now</button></div>
         </div>
         <div class="card set">
           <div class="set-row"><div><b>SEC contact</b><p>The SEC asks automated clients to identify themselves with a name and email. Optional; stays on this computer.</p></div><input id="st-sec" type="text" placeholder="Your Name you@example.com" spellcheck="false"></div>

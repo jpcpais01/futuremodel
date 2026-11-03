@@ -2,15 +2,19 @@
 'use strict';
 const { MODELS, WEB_SEARCH_PER_CALL } = require('./config');
 
-let client = null;
+let client = null, KEY = null;
+/* The key comes from the ANTHROPIC_API_KEY environment variable (PC) or from the app's encrypted storage (phone). */
+function setKey(k) { KEY = k || null; client = null; }
+const keyOf = () => KEY || (typeof process !== 'undefined' && process.env && process.env.ANTHROPIC_API_KEY) || null;
 function getClient() {
   if (client) return client;
-  if (!process.env.ANTHROPIC_API_KEY) throw Object.assign(new Error('ANTHROPIC_API_KEY is not set. Add it as a Windows environment variable, then restart Oazy Council.'), { code: 'NO_KEY' });
+  const apiKey = keyOf();
+  if (!apiKey) throw Object.assign(new Error('No Anthropic API key. On the PC set the ANTHROPIC_API_KEY environment variable; on the phone paste it in Settings.'), { code: 'NO_KEY' });
   const Anthropic = require('@anthropic-ai/sdk');
-  client = new Anthropic({ maxRetries: 4, timeout: 20 * 60e3 });   // the key is read from the environment by the SDK
+  client = new Anthropic({ apiKey, maxRetries: 4, timeout: 20 * 60e3, dangerouslyAllowBrowser: true });   // the phone's web view counts as a browser; the key never leaves the device except to Anthropic
   return client;
 }
-const hasKey = () => !!process.env.ANTHROPIC_API_KEY;
+const hasKey = () => !!keyOf();
 
 function cost(model, u, searches = 0) {
   const p = MODELS[model] || MODELS[Object.keys(MODELS).find((k) => model && model.startsWith(k))] || MODELS['claude-opus-5-5'];
@@ -109,4 +113,4 @@ async function call(o) {
   return { data, text, usage: { ...total, web_search_requests: searches }, cost: spent, model: servedBy, ms: Date.now() - t0 };
 }
 
-module.exports = { call, cost, partialField, parseJSON, setMock, hasKey, isMock: () => MOCK };
+module.exports = { call, cost, partialField, parseJSON, setMock, hasKey, setKey, isMock: () => MOCK };
