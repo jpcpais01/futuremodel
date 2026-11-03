@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src http: https:; object-src 'none'; base-uri 'none'">
+  <meta name="theme-color" content="#06070c">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.png">
+  <title>Oazy Council</title>
+  <link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+  <div id="bg"></div>
+
+  <!-- Pairing -->
+  <section id="pair" class="screen hidden">
+    <div class="pair-box">
+      <div class="mark big"></div>
+      <h1>Oazy <b>Council</b></h1>
+      <p class="lede">Connect to the council running on your PC. Turn on <em>Phone link</em> in the desktop app's Settings, then enter the address and code it shows.</p>
+      <label>Address<input id="p-host" type="url" inputmode="url" placeholder="http://192.168.1.20:7717" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <label>Pairing code<input id="p-code" type="text" placeholder="ABCD-EFGH-JKLM" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+      <button id="p-go" class="primary wide">Connect</button>
+      <p id="p-err" class="err"></p>
+      <p class="fine">Your phone and PC need to be on the same Wi-Fi. The first time, Windows may ask whether to allow Oazy Council on private networks: allow it.</p>
+    </div>
+  </section>
+
+  <!-- App -->
+  <div id="app" class="hidden">
+    <header id="top">
+      <div class="brand"><span class="mark"></span><span>Oazy <b>Council</b></span></div>
+      <span class="grow"></span>
+      <button id="mode" class="mode">Paper</button>
+      <span id="conn" class="conn" title="Connection"></span>
+    </header>
+
+    <main>
+      <!-- Council -->
+      <section id="s-council" class="screen on">
+        <div class="chamber"><canvas id="cv"></canvas>
+          <div id="c-core"><div id="c-phase">Adjourned</div><div id="c-sub"></div></div>
+        </div>
+        <div id="live" class="hidden">
+          <div class="strip"><span id="l-step"></span><span class="grow"></span><span id="l-cost" class="num"></span></div>
+          <div class="meter"><i id="l-bar"></i></div>
+          <div id="floor" class="card"><div class="f-head"><span class="dot"></span><b id="f-who"></b><span id="f-role"></span><span class="grow"></span><span id="f-round"></span></div><p id="f-text"></p></div>
+          <div id="feed"></div>
+          <button id="l-cancel" class="ghost wide hidden">Adjourn the session</button>
+        </div>
+        <div id="idle">
+          <div id="last" class="card"></div>
+          <div id="conv" class="card">
+            <div class="eyebrow">Convene from the phone</div>
+            <div id="presets" class="presets"></div>
+            <label class="check"><input type="checkbox" id="demo"><span></span>Demo run, free</label>
+            <button id="go" class="primary wide">Convene</button>
+          </div>
+          <p id="next" class="fine center"></p>
+        </div>
+      </section>
+
+      <!-- Portfolio -->
+      <section id="s-portfolio" class="screen">
+        <div class="head"><div class="eyebrow" id="pf-asof"></div><h2>Portfolio</h2></div>
+        <div id="pf-kpis" class="kpis"></div>
+        <div id="pf-note" class="note hidden"></div>
+        <p id="pf-sum" class="thesis"></p>
+        <div id="pf-list"></div>
+        <button id="pf-watch" class="ghost wide">Run the watch now</button>
+        <div id="pf-watchlog"></div>
+      </section>
+
+      <!-- Record -->
+      <section id="s-record" class="screen">
+        <div class="head"><div class="eyebrow">Forward paper record</div><h2>Against the market</h2></div>
+        <div class="card"><div class="legend"><span class="lg nav">Council</span><span class="lg spy">SPY</span><span class="lg qqq">QQQ</span></div><canvas id="chart"></canvas></div>
+        <div id="rc-kpis" class="kpis"></div>
+        <div class="card honest"><p>A forward paper record. Each decision is written to a hash-chained ledger before the market opens and fills at the next open with a 0.1% cost.</p><p>There is no backtest on purpose: a language model already knows the past, so only the record from here forward counts. Judge it after several months.</p><p id="rc-ledger"></p></div>
+      </section>
+
+      <!-- Sessions -->
+      <section id="s-sessions" class="screen">
+        <div class="head"><div class="eyebrow">Transcripts</div><h2>Sessions</h2></div>
+        <div id="ss-list"></div>
+      </section>
+      <section id="s-session" class="screen">
+        <button id="ss-back" class="back">‹ Sessions</button>
+        <div id="ss-detail"></div>
+      </section>
+    </main>
+
+    <nav id="tabs">
+      <button data-s="council" class="on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8.5" stroke-dasharray="2 3"/></svg>Council</button>
+      <button data-s="portfolio"><svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5H12z"/><path d="M15 3.8A8.5 8.5 0 0 1 20.2 9H15z"/></svg>Portfolio</button>
+      <button data-s="record"><svg viewBox="0 0 24 24"><path d="M3.5 17l5-5 3.5 3 8-8"/><path d="M15 7h5v5"/></svg>Record</button>
+      <button data-s="sessions"><svg viewBox="0 0 24 24"><path d="M5 5h14M5 10h14M5 15h9M5 20h6"/></svg>Sessions</button>
+      <button data-s="pair"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg>Link</button>
+    </nav>
+  </div>
+  <div id="toast"></div>
+  <script src="mobile.js"></script>
+</body>
+</html>

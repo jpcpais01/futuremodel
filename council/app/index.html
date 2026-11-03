@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oazy Council</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="bg"></div>
+
+  <header id="titlebar">
+    <div class="brand"><span class="mark"></span><span class="word">Oazy <b>Council</b></span></div>
+    <nav id="tabs">
+      <button data-view="chamber" class="on">Chamber</button>
+      <button data-view="portfolio">Portfolio</button>
+      <button data-view="performance">Performance</button>
+      <button data-view="sessions">Sessions</button>
+      <button data-view="settings">Settings</button>
+    </nav>
+    <div class="right">
+      <div id="mode" class="seg small" title="Paper is the real record. Demo uses scripted agents on real data and keeps its own record.">
+        <button data-mode="paper" class="on">Paper</button><button data-mode="demo">Demo</button>
+      </div>
+      <div class="win">
+        <button id="wmin" aria-label="Minimize"><svg viewBox="0 0 10 10"><path d="M1 5h8"/></svg></button>
+        <button id="wmax" aria-label="Maximize"><svg viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7"/></svg></button>
+        <button id="wclose" aria-label="Close" class="x"><svg viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"/></svg></button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ── Chamber ─────────────────────────────────────────────── -->
+    <section id="v-chamber" class="view on">
+      <div id="stage">
+        <canvas id="ring"></canvas>
+        <div id="seats"></div>
+        <div id="core">
+          <div id="core-phase">The council is adjourned</div>
+          <div id="core-sub"></div>
+        </div>
+
+        <div id="convene" class="glass">
+          <div class="eyebrow">Next session</div>
+          <h1>Convene the council</h1>
+          <p class="lede">Eight minds, one portfolio. Every one of the 155 names is read before anyone speaks, and nothing is ranked out by code.</p>
+          <div id="presets" class="presets"></div>
+          <div class="convene-row">
+            <label class="check"><input type="checkbox" id="demoRun"><span></span>Demo run <em>scripted agents, real data, free</em></label>
+            <div class="grow"></div>
+            <button id="replayLast" class="ghost">Replay last session</button>
+            <button id="go" class="primary">Convene</button>
+          </div>
+          <div id="keywarn" class="warn hidden"></div>
+        </div>
+
+        <div id="floor" class="glass hidden">
+          <div class="floor-head"><span class="dot"></span><span id="floor-who"></span><span id="floor-role"></span><span class="grow"></span><span id="floor-round"></span></div>
+          <div id="floor-text"></div>
+          <div id="floor-think"></div>
+        </div>
+
+        <div id="verdict" class="glass hidden"></div>
+        <div id="replaybar" class="glass hidden">
+          <span class="eyebrow">Replay</span><span id="replay-id"></span>
+          <div class="seg small" id="replay-speed"><button data-s="1" class="on">1×</button><button data-s="3">3×</button><button data-s="8">8×</button></div>
+          <button id="replay-stop" class="ghost small">Stop</button>
+        </div>
+      </div>
+
+      <aside id="side">
+        <div class="card agenda-card">
+          <div class="card-head"><span>Agenda</span><span class="grow"></span><span id="sessId" class="mono dim"></span></div>
+          <ol id="agenda"></ol>
+          <div id="progress"></div>
+        </div>
+        <div class="card cost-card">
+          <div class="cost-row">
+            <div><div class="eyebrow">Spent this session</div><div id="cost" class="num big">$0.00</div></div>
+            <div class="right-al"><div class="eyebrow">Estimate</div><div id="costEst" class="num">—</div></div>
+          </div>
+          <div class="meter"><i id="costBar"></i></div>
+          <div class="cost-foot"><span id="elapsed" class="mono dim">0:00</span><span class="grow"></span><button id="cancel" class="ghost small hidden">Adjourn</button></div>
+        </div>
+        <div class="card log-card">
+          <div class="seg small" id="sidetabs"><button data-p="floor" class="on">Floor</button><button data-p="matrix">Conviction</button><button data-p="desk">Desk</button></div>
+          <div id="p-floor" class="pane on"><div id="transcript"><div class="empty">Statements appear here as the seats speak.</div></div></div>
+          <div id="p-matrix" class="pane"><div id="matrix"><div class="empty">Each seat's weights appear once proposals arrive.</div></div></div>
+          <div id="p-desk" class="pane"><div id="desk"><div class="empty">The analysts' verdicts on every name.</div></div></div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ── Portfolio ───────────────────────────────────────────── -->
+    <section id="v-portfolio" class="view">
+      <div class="page">
+        <div class="page-head">
+          <div><div class="eyebrow" id="pf-asof"></div><h2>The council's portfolio</h2></div>
+          <div class="grow"></div>
+          <button id="pf-watch" class="ghost">Run the watch now</button>
+        </div>
+        <div id="pf-kpis" class="kpis"></div>
+        <div id="pf-pending" class="note hidden"></div>
+        <div class="pf-grid">
+          <div class="card"><div id="pf-donut"></div></div>
+          <div class="card pf-thesis"><div class="eyebrow">Thesis</div><p id="pf-summary" class="lede"></p><div id="pf-meta"></div></div>
+        </div>
+        <div class="card"><table id="pf-table" class="tbl"></table></div>
+        <div class="two">
+          <div class="card"><div class="card-head"><span>Recorded dissent</span></div><div id="pf-dissent"></div></div>
+          <div class="card"><div class="card-head"><span>Watch log</span></div><div id="pf-watchlog"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Performance ─────────────────────────────────────────── -->
+    <section id="v-performance" class="view">
+      <div class="page">
+        <div class="page-head"><div><div class="eyebrow">Forward paper record</div><h2>Council against the market</h2></div></div>
+        <div id="pr-kpis" class="kpis"></div>
+        <div class="card chart-card">
+          <div class="legend"><span class="lg nav">Council</span><span class="lg spy">S&amp;P 500 (SPY)</span><span class="lg qqq">Nasdaq 100 (QQQ)</span><span class="grow"></span><span id="pr-range" class="mono dim"></span></div>
+          <canvas id="chart"></canvas>
+          <div id="chart-tip" class="tip hidden"></div>
+        </div>
+        <div class="two">
+          <div class="card"><div class="card-head"><span>Ledger integrity</span><span class="grow"></span><button id="pr-verify" class="ghost small">Verify again</button></div><div id="pr-verify-out"></div><div id="pr-fills"></div></div>
+          <div class="card honest">
+            <div class="card-head"><span>How to read this</span></div>
+            <p>This is a forward paper record. Every decision is written to a hash-chained ledger with its timestamp before the market sees it, and it fills at the next regular-session open with a 0.1% trading cost. Values use total-return prices, the same as the benchmarks.</p>
+            <p>There is deliberately no backtest. A language model already knows what happened in the past, so any backtest of the council would be contaminated by hindsight. Only the record built from here forward counts, and a few weeks of it is noise. Judge it after several months.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Sessions ────────────────────────────────────────────── -->
+    <section id="v-sessions" class="view">
+      <div class="page sessions">
+        <div class="ss-list card"><div class="card-head"><span>Sessions</span></div><div id="ss-list"></div></div>
+        <div class="ss-detail card" id="ss-detail"><div class="empty">Choose a session to read its full transcript.</div></div>
+      </div>
+    </section>
+
+    <!-- ── Settings ────────────────────────────────────────────── -->
+    <section id="v-settings" class="view">
+      <div class="page narrow">
+        <div class="page-head"><div><div class="eyebrow">Oazy Council</div><h2>Settings</h2></div></div>
+        <div class="card set">
+          <div class="set-row"><div><b>Anthropic API key</b><p>Read from the <code>ANTHROPIC_API_KEY</code> environment variable only. It is never written to disk by this app.</p></div><div id="st-key"></div></div>
+          <div id="st-keyhelp" class="keyhelp hidden">
+            <p>Open PowerShell and run this once, with your own key, then restart the app:</p>
+            <pre>setx ANTHROPIC_API_KEY "sk-ant-..."</pre>
+            <p>Create or rotate keys at <a href="#" data-url="https://console.anthropic.com/settings/keys">console.anthropic.com</a>.</p>
+          </div>
+        </div>
+        <div class="card set">
+          <div class="set-row"><div><b>Default budget</b><p>Used for scheduled and emergency sessions.</p></div><div class="seg" id="st-preset"></div></div>
+          <div class="set-row"><div><b>Weekly session</b><p>The council reviews and rotates the portfolio once a week. Trades fill at the next open.</p></div>
+            <div class="inline"><label class="switch"><input type="checkbox" id="st-sch-on"><span></span></label>
+              <select id="st-sch-day"></select><input type="time" id="st-sch-time"></div></div>
+          <div class="set-row"><div><b>Catch up if missed</b><p>If the computer was off at the slot, run within three days.</p></div><label class="switch"><input type="checkbox" id="st-catch"><span></span></label></div>
+          <div class="set-row"><div><b>Daily watch</b><p>Weekdays after the close, one cheap call checks every holding against its own sell condition.</p></div>
+            <div class="inline"><label class="switch"><input type="checkbox" id="st-w-on"><span></span></label><input type="time" id="st-w-time"></div></div>
+          <div class="set-row"><div><b>Emergency sessions</b><p>Convene automatically when the watch says a thesis has broken. Off means it only notifies you.</p></div><label class="switch"><input type="checkbox" id="st-emerg"><span></span></label></div>
+          <div class="set-row"><div><b>Keep running in the tray</b><p>Closing the window keeps the schedule alive.</p></div><label class="switch"><input type="checkbox" id="st-tray"><span></span></label></div>
+        </div>
+        <div class="card set">
+          <div class="set-row"><div><b>Phone link</b><p>Lets the Oazy Council phone app follow the chamber and the portfolio over your home Wi-Fi. Only devices on your local network with the pairing code can connect.</p></div><label class="switch"><input type="checkbox" id="st-ph-on"><span></span></label></div>
+          <div id="st-ph" class="hidden">
+            <div class="set-row"><div><b>Pairing</b><p>In the phone app, enter one of these addresses and the code.</p><div id="st-ph-addr" class="mono" style="margin-top:6px"></div></div><div style="text-align:right"><div id="st-ph-code" class="num big mono" style="letter-spacing:.08em"></div><button id="st-ph-new" class="ghost small" style="margin-top:6px">New code</button></div></div>
+            <div class="set-row"><div><b>Phone can convene</b><p>Allow the phone to start sessions and the watch. Real sessions cost money.</p></div><label class="switch"><input type="checkbox" id="st-ph-run"><span></span></label></div>
+          </div>
+        </div>
+        <div class="card set">
+          <div class="set-row"><div><b>SEC contact</b><p>The SEC asks automated clients to identify themselves with a name and email. Optional; stays on this computer.</p></div><input id="st-sec" type="text" placeholder="Your Name you@example.com" spellcheck="false"></div>
+          <div class="set-row"><div><b>Data folder</b><p id="st-dir" class="mono"></p></div><button id="st-open" class="ghost">Open</button></div>
+          <div class="set-row"><div><b>Spent this month</b><p>All real sessions, from recorded usage.</p></div><div id="st-spent" class="num big"></div></div>
+        </div>
+        <div class="card set"><div class="card-head"><span>Budget presets</span></div><div id="st-presets"></div></div>
+        <p class="foot dim" id="st-ver"></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast"></div>
+  <script src="chamber.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
