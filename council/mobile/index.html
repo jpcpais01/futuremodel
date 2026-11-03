@@ -23,16 +23,29 @@
     </header>
 
     <main>
-      <!-- Council -->
+      <!-- Council: a living picture of the portfolio taking shape, the seats, and who is speaking. -->
       <section id="s-council" class="screen on">
-        <div class="chamber"><canvas id="cv"></canvas></div>
-        <div id="c-core"><div id="c-phase">Adjourned</div><div id="c-sub"></div></div>
+        <div id="stage" class="stage">
+          <canvas id="cv"></canvas>
+          <div class="st-over">
+            <div id="track" class="track hidden"></div>
+            <div class="st-meta"><span id="l-step" class="eyebrow">The council</span><span class="grow"></span><span id="l-cost" class="num"></span></div>
+            <div id="c-phase">Adjourned</div>
+            <div id="c-sub"></div>
+          </div>
+          <div id="tip" class="tip hidden"></div>
+        </div>
 
         <div id="live" class="hidden">
-          <div class="glass live-bar"><div class="lb-row"><span id="l-step"></span><span class="grow"></span><span id="l-cost" class="num"></span></div><div class="meter"><i id="l-bar"></i></div></div>
-          <div id="floor" class="glass hidden"><div class="f-head"><span class="dot"></span><b id="f-who"></b><span id="f-role"></span><span class="grow"></span><span id="f-round" class="tag"></span></div><p id="f-text"></p></div>
+          <div id="seats" class="seats"></div>
+          <div id="floor" class="glass floor hidden">
+            <div class="f-head"><span id="f-av"></span><div class="grow"><b id="f-who"></b><span id="f-role"></span></div><span id="f-round" class="tag"></span></div>
+            <div id="f-text"></div>
+          </div>
+          <div class="sec-title"><span id="cs-title">Where the council leans</span><span id="cs-aside" class="sec-aside"></span></div>
+          <div id="cons" class="glass cons"><div class="cons-rows"></div><p class="cons-empty">The names the seats propose will gather here, weighted by how much of the council backs them.</p></div>
           <div class="sec-title">On the record</div>
-          <div id="feed" class="glass list"></div>
+          <div id="feed" class="timeline"></div>
           <button id="l-cancel" class="btn-ghost wide hidden">Adjourn the session</button>
         </div>
 
@@ -43,11 +56,11 @@
             <button id="due-go" class="btn-white small">Convene</button>
           </div>
 
-          <div id="conv">
-            <div class="sec-title">Convene</div>
-            <div id="presets" class="rail"></div>
-            <div id="preset-info" class="preset-info"></div>
-            <div class="go-row glass">
+          <div id="conv" class="glass convene">
+            <div class="eyebrow">Convene the council</div>
+            <div id="presets" class="budgets"></div>
+            <div id="preset-info" class="pinfo"></div>
+            <div class="go-row">
               <label class="switch-row"><span class="sw"><input type="checkbox" id="demo"><i></i></span><span>Demo run<small>scripted seats, free</small></span></label>
               <button id="go" class="btn-white">Convene</button>
             </div>

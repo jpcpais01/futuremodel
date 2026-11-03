@@ -9,7 +9,7 @@ window.OazyCore = {
   llm: require('../engine/llm'),   // for the self-test
   create({ onEvents, onChanged }) {
     return createCore({
-      platform: 'android', version: '1.1.0', deviceName: host.deviceName(),
+      platform: 'android', version: '1.2.0', deviceName: host.deviceName(),
       secrets: { get: (k) => host.secretGet(k), set: (k, v) => host.secretSet(k, v) },
       onEvents, onChanged,
       keepAlive: (on, text) => host.keepAlive(on, text),
