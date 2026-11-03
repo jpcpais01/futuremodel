@@ -72,6 +72,8 @@ function createCore({ platform = 'pc', version = '1.0.0', deviceName = 'device',
         holdings: s.final?.holdings?.length || 0, summary: s.final?.summary, confidence: s.final?.confidence, demo: !!s.demo };
     }).filter(Boolean);
   }
+  /* Daily closes for one ticker from the local price cache, as [time, adjusted close]. */
+  const history = (t, days = 400) => { const h = histOf(t); if (!h?.bars) return []; const from = Date.now() - days * 864e5; return h.bars.map((b) => [Date.parse(b.d + 'T21:00:00Z'), b.ac ?? b.c]).filter((p) => p[0] >= from); };
   const getSession = (id) => (/^S-[\d-]+$/.test(String(id)) ? store.readJSON(`sessions/${id}.json`) : null);
   function portfolio(demoMode) {
     const file = demoMode ? 'demo-ledger.jsonl' : 'ledger.jsonl';
@@ -89,7 +91,7 @@ function createCore({ platform = 'pc', version = '1.0.0', deviceName = 'device',
     const month = 'S-' + new Date().toISOString().slice(0, 7).replace('-', '');
     const spent = store.list('sessions').filter((f) => f.startsWith(month)).reduce((a, f) => a + (store.readJSON('sessions/' + f)?.cost || 0), 0);
     return {
-      platform, settings: s, hasKey: llm.hasKey(), hasToken: !!secrets?.get('syncToken'), canPasteKey: platform === 'android', presets, seats: C.SEATS, officers: C.OFFICERS,
+      platform, settings: s, hasKey: llm.hasKey(), hasToken: !!secrets?.get('syncToken'), canPasteKey: true, presets, seats: C.SEATS, officers: C.OFFICERS,
       universe: C.UNIVERSE.map((u) => ({ t: u[0], n: u[1], s: u[2], k: u[3] })), limits: C.LIMITS,
       running: running && { id: running.id, preset: running.preset, demo: running.demo },
       next: { session: nextSession(s), watch: nextWatch(s) }, due: due(s), spentThisMonth: spent, dataDir: store.root(), version, sync: sync.status(),
@@ -145,7 +147,7 @@ function createCore({ platform = 'pc', version = '1.0.0', deviceName = 'device',
     if (running) throw new Error('The council is already in session.');
     if (!C.PRESETS[preset]) preset = 'normal';
     applyKey();
-    if (!demo && !llm.hasKey()) throw Object.assign(new Error(platform === 'android' ? 'Paste your Anthropic API key in Settings first.' : 'ANTHROPIC_API_KEY is not set. See Settings.'), { code: 'NO_KEY' });
+    if (!demo && !llm.hasKey()) throw Object.assign(new Error(platform === 'android' ? 'Paste your Anthropic API key in Settings first.' : 'Add your Anthropic API key in Settings first.'), { code: 'NO_KEY' });
     // Get the shared record first: the council must know what it holds, wherever it last met.
     if (sync.enabled()) {
       try { await sync.pull(); } catch (e) { emitLog('Sync unavailable, using this device\'s copy: ' + e.message); }
@@ -204,7 +206,7 @@ function createCore({ platform = 'pc', version = '1.0.0', deviceName = 'device',
   // One-time move of shared settings from the old single settings file.
   if (!store.readJSON('shared.json')) { const old = store.readJSON('settings.json', {}), m = pick(old, SHARED_KEYS); if (Object.keys(m).length) store.writeJSON('shared.json', { ...m, updatedAt: 0 }); }
   configureSync(); applyKey();
-  return { settings, setSettings, setSecret, state, sessions, session: getSession, portfolio, run, cancel, watch: runWatch, refreshMarks, syncNow, remoteLive, due, watchDue, live: () => (running ? live : []), isRunning: () => !!running, verify: (demo) => ledger.verify(demo ? 'demo-ledger.jsonl' : 'ledger.jsonl') };
+  return { settings, setSettings, setSecret, state, sessions, session: getSession, portfolio, history, run, cancel, watch: runWatch, refreshMarks, syncNow, remoteLive, due, watchDue, live: () => (running ? live : []), isRunning: () => !!running, verify: (demo) => ledger.verify(demo ? 'demo-ledger.jsonl' : 'ledger.jsonl') };
 }
 
 module.exports = { createCore, SHARED_DEFAULTS };

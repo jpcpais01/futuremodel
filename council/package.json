@@ -2,19 +2,16 @@
   "name": "oazy-council",
   "productName": "Oazy Council",
   "version": "1.2.0",
-  "description": "An AI investment council that always holds the best portfolio it can find",
+  "description": "The council engine and the Android app. The desktop app is Oazy Research (../research).",
   "author": "Oazy",
-  "main": "main.js",
   "private": true,
   "scripts": {
-    "start": "electron .",
     "session": "node engine/cli.js session",
     "demo": "node engine/cli.js session --demo",
     "watch": "node engine/cli.js watch",
     "status": "node engine/cli.js status",
     "estimate": "node engine/cli.js estimate",
     "test": "node test/run.js",
-    "dist": "electron-builder --win nsis portable",
     "apk": "bash android/build.sh",
     "bundle": "node phone/build.js"
   },
@@ -22,40 +19,6 @@
     "@anthropic-ai/sdk": "^1.4.0"
   },
   "devDependencies": {
-    "electron": "^45.2.1",
-    "electron-builder": "^26.18.0",
     "esbuild": "^0.25.10"
-  },
-  "build": {
-    "appId": "com.oazy.council",
-    "productName": "Oazy Council",
-    "files": [
-      "main.js",
-      "preload.js",
-      "engine/**",
-      "app/**",
-      "package.json",
-      "!**/*.map"
-    ],
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
-    },
-    "win": {
-      "icon": "build/icon.ico",
-      "target": [
-        "nsis",
-        "portable"
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "shortcutName": "Oazy Council"
-    },
-    "portable": {
-      "artifactName": "OazyCouncil-portable-${version}.exe"
-    }
   }
 }

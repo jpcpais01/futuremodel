@@ -3,13 +3,13 @@
 const { MODELS, WEB_SEARCH_PER_CALL } = require('./config');
 
 let client = null, KEY = null;
-/* The key comes from the ANTHROPIC_API_KEY environment variable (PC) or from the app's encrypted storage (phone). */
+/* The key comes from the app's encrypted storage (Oazy Research on the PC, the phone app), or the ANTHROPIC_API_KEY environment variable for the command line. */
 function setKey(k) { KEY = k || null; client = null; }
 const keyOf = () => KEY || (typeof process !== 'undefined' && process.env && process.env.ANTHROPIC_API_KEY) || null;
 function getClient() {
   if (client) return client;
   const apiKey = keyOf();
-  if (!apiKey) throw Object.assign(new Error('No Anthropic API key. On the PC set the ANTHROPIC_API_KEY environment variable; on the phone paste it in Settings.'), { code: 'NO_KEY' });
+  if (!apiKey) throw Object.assign(new Error('No Anthropic API key. Paste it in Settings, or set ANTHROPIC_API_KEY for the command line.'), { code: 'NO_KEY' });
   const Anthropic = require('@anthropic-ai/sdk');
   client = new Anthropic({ apiKey, maxRetries: 4, timeout: 20 * 60e3, dangerouslyAllowBrowser: true });   // the phone's web view counts as a browser; the key never leaves the device except to Anthropic
   return client;

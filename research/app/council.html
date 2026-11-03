@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'">
+<title>Oazy Research · Council</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="oazy.css">
+<link rel="stylesheet" href="council.css">
+</head>
+<body class="cx">
+<canvas id="sky"></canvas>
+<div id="boot" aria-hidden="true"><img src="icon.png" alt=""><div><b>OAZY</b><i>COUNCIL</i></div></div>
+
+<header id="top">
+  <div class="brand"><img src="icon.png" alt=""><b>OAZY</b><i>RESEARCH</i></div>
+  <button class="pf" id="pf" aria-haspopup="menu" aria-label="Switch portfolio"></button>
+  <nav class="tabs" id="tabs" aria-label="Pages"><span class="pill" id="pill"></span></nav>
+  <div class="grow"></div>
+  <div class="mode" id="mode" role="group" aria-label="Paper or demo"><button data-m="paper">Paper</button><button data-m="demo">Demo</button></div>
+  <button class="status" id="status" title="Account sync"><i id="dot"></i><span id="statusT">Local</span></button>
+  <button class="icon" id="bell" aria-label="Watch"></button>
+  <button class="icon" id="gear" aria-label="Settings"></button>
+  <div class="sep"></div>
+  <button class="icon win" id="wMin" aria-label="Minimize"></button>
+  <button class="icon win" id="wMax" aria-label="Maximize"></button>
+  <button class="icon win x" id="wClose" aria-label="Close"></button>
+</header>
+
+<section class="page" id="p-home">
+  <div id="rail" role="listbox" aria-label="Holdings"></div>
+  <div id="stage"><div id="info"></div><div id="heroWrap"><canvas id="heroC"></canvas><span class="pulse"></span><div class="cap" id="heroCap"></div><div class="chips" id="ranges"></div></div></div>
+  <div id="hints">Scroll or ←  →  Browse &nbsp;&nbsp; ↵  Open &nbsp;&nbsp; Tab  Pages</div>
+</section>
+
+<section class="page" id="p-hold"><div class="wrap">
+  <div class="tools"><div><h2>Holdings</h2><p class="lede" id="holdSub"></p></div><div class="grow"></div><div class="chips" id="secChips"></div><input class="search" id="q" placeholder="Search" aria-label="Search holdings" spellcheck="false"></div>
+  <div class="grid" id="grid"></div>
+</div></section>
+
+<section class="page" id="p-perf"><div class="wrap">
+  <div class="perfTop"><div><span class="kick" id="perfKick"></span><h2 id="perfRet" style="margin-top:6px">—</h2></div><div class="st"><span>Total P&amp;L</span><b id="perfPL">—</b></div><div class="st"><span>vs S&amp;P 500</span><b id="perfSP">—</b></div><div class="st"><span>vs Nasdaq-100</span><b id="perfND">—</b></div><div class="st"><span>Max drawdown</span><b id="perfDD">—</b></div><div class="st"><span>Sharpe</span><b id="perfSh">—</b></div><div class="grow"></div><button class="chip ledger" id="ledger"></button></div>
+  <div id="perfBig"><canvas id="perfC"></canvas><span class="pulse"></span><div class="cap" id="perfCap"></div></div>
+  <div class="trio"><div class="glass mini"><h4>Allocation</h4><div class="alloc"><div class="ring" id="ring"></div><div class="lgnd" id="ringL"></div></div></div><div class="glass mini"><h4>Leading</h4><div id="lead"></div></div><div class="glass mini"><h4>Lagging</h4><div id="lag"></div></div></div>
+</div></section>
+
+<section class="page" id="p-council"><div class="wrap ch">
+  <div class="ch-left">
+    <div class="ch-head"><span class="kick" id="l-step"></span><h2 id="c-phase">The council</h2><p class="lede" id="c-sub"></p><div class="ch-meta"><div class="track hidden" id="track"></div><span class="lv-cost" id="l-cost"></span><button class="chip hidden" id="l-cancel">Adjourn</button></div></div>
+    <div class="ch-stage" id="chStage"><canvas id="cv"></canvas><div class="btip hidden" id="btip"></div>
+      <div class="ch-legend" id="legend"></div></div>
+  </div>
+  <div class="ch-right">
+    <div id="idle">
+      <div class="glass cv-card">
+        <div class="cv-top"><div><span class="kick">Convene</span><h3>Choose a budget</h3></div><div class="grow"></div><label class="sw"><input type="checkbox" id="demoRun"><span></span>Demo run</label></div>
+        <div class="buds" id="presets"></div>
+        <div class="pinfo" id="presetInfo"></div>
+        <div class="cv-go"><button class="btn pri" id="go">Convene</button><span class="mu" id="goNote"></span></div>
+      </div>
+      <div class="glass due hidden" id="due"><div><b>The weekly session is due</b><span>No device has run it yet. It runs on your default budget.</span></div><button class="btn pri" id="dueGo">Run it now</button></div>
+      <div class="glass nextc" id="nextCard"></div>
+      <div class="glass lastc" id="last"></div>
+    </div>
+    <div id="live" class="hidden">
+      <div class="lv-bar"><div class="seats" id="seats"></div></div>
+      <div class="glass floor hidden" id="floor"><div class="f-h"><span id="f-av"></span><div><b id="f-who"></b><small id="f-role"></small></div><div class="grow"></div><span class="tag" id="f-round"></span></div><div class="f-text" id="f-text"></div></div>
+      <div class="lv-tabs chips" id="lvTabs"><button class="chip on" data-p="cons">Where it leans</button><button class="chip" data-p="feed">Timeline</button></div>
+      <div class="lv-pane on" id="pane-cons"><div class="cons" id="cons"><div class="cons-h"><b id="cs-title">Where the council leans</b><span id="cs-aside"></span></div><div class="cons-rows" id="consRows"></div></div></div>
+      <div class="lv-pane" id="pane-feed"><div class="feed" id="feed"></div></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="page" id="p-sess"><div class="wrap">
+  <div class="tools"><div><h2>Sessions</h2><p class="lede" id="sessSub"></p></div></div>
+  <div class="two ss-two"><div class="col"><div class="list" id="ssList"></div></div><div class="col"><div class="list tr-box" id="ssDetail"></div></div></div>
+</div></section>
+
+<div class="pop" id="pop"></div>
+<div class="pfm" id="pfm" role="menu"></div>
+<div class="ov" id="ov"><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="tip" id="tip"></div>
+<div id="toast" role="status"></div>
+<script src="cx/brand.js"></script>
+<script src="oazy-kit.js"></script>
+<script src="council.js"></script>
+</body>
+</html>

@@ -2,13 +2,13 @@
 
 A council of Claude agents that tries to always hold the best portfolio it can find. Each week it reads every name in a 155-name universe, debates, attacks its own ideas, and decides what to hold until the next session. Every decision goes into a tamper-evident paper-trading record, measured against the S&P 500 (SPY) and the Nasdaq 100 (QQQ).
 
-It has three parts:
+It runs in three places, all on one account:
 
-- A **desktop app** for Windows (Electron) with a live view of the council chamber.
+- **Oazy Research** on Windows, as its second portfolio next to Core v1.0 (the app lives in [`../research`](../research)).
 - A **phone app** for Android that runs the council on its own, with your API key pasted in the app.
-
-The PC and the phone are one account: the same portfolio, ledger, sessions and settings on both, kept in sync through a private GitHub repository you own.
 - A **command line** for running sessions from scripts or Task Scheduler.
+
+The PC and the phone share the same portfolio, ledger, sessions and settings, kept in sync through a GitHub repository you own.
 
 ## How a session works
 
@@ -47,32 +47,19 @@ There is deliberately **no backtest**. A language model already knows what happe
 
 A few weeks of results is noise. Judge it after several months, and preferably against QQQ, which is the hardest benchmark here.
 
-## Setup (Windows)
+## On the PC: Oazy Research
 
-You need [Node.js](https://nodejs.org) 20 or newer.
+The council is the **Council** portfolio inside Oazy Research. Switch between Core v1.0 and Council with the portfolio button next to the logo. See [`../research/README.md`](../research/README.md) to run or build it.
 
-```powershell
-cd C:\Users\jpcpa\Paizy\council
-npm install
-setx ANTHROPIC_API_KEY "your-key"      # once; then open a new terminal
-npm start
-```
+Paste your Anthropic API key in the Council's **Settings** (the gear). It is encrypted with Windows' own protection for your user, never synced, and only sent to Anthropic. Create or rotate keys at https://console.anthropic.com/settings/keys. The command line can also read it from the `ANTHROPIC_API_KEY` environment variable.
 
-The API key is read **only** from the `ANTHROPIC_API_KEY` environment variable. The app never writes it to disk. Create or rotate keys at https://console.anthropic.com/settings/keys.
+Optional: fill in the SEC contact in Settings (for example `Your Name you@example.com`). The SEC asks automated clients to identify themselves. It stays on that device.
 
-Optional: set `SEC_CONTACT` (for example `"Your Name you@example.com"`), or fill in the field in Settings. The SEC asks automated clients to identify themselves.
-
-To try it without a key, tick **Demo run**. Demo runs use scripted seats on real market data, cost nothing, and keep their own separate record (switch between them with Paper and Demo at the top).
-
-### Build an installer
-
-```powershell
-npm run dist          # dist\Oazy Council Setup 1.0.0.exe and a portable .exe
-```
+To try it without a key, switch to **Demo** at the top (or tick **Demo run**). Demo runs use scripted seats on real market data, cost nothing, and keep their own separate record.
 
 ### Schedule
 
-While the app is running (it can stay in the tray), it convenes on its own every week (Sunday 20:00 local time by default) and runs the watch on weekdays at 22:30. If the computer was off at the time slot, it catches up within three days. Change all of this in Settings.
+While Oazy Research is running (it can stay in the tray), it convenes on its own every week (Sunday 20:00 local time by default) and runs the watch on weekdays at 22:30. If every device was off at the time slot, it catches up within three days. Change all of this in Settings.
 
 Without the app, you can use Task Scheduler with the command line:
 
@@ -86,7 +73,7 @@ The phone app does not need the PC. It runs the same council engine on the phone
 
 1. Install `OazyCouncil.apk`. Android will ask you to allow installs from your file manager or browser.
 2. Open **Settings** in the app and paste your Anthropic API key. It is encrypted with the phone's keystore, never synced, and only sent to Anthropic.
-3. Fill in the account (below) to share everything with the PC.
+3. Fill in the account (below) to share everything with Oazy Research on the PC.
 
 While a session runs, the phone keeps the screen on and shows a notification so Android does not stop it. The weekly session is run by whichever device is on at the time: the PC runs it on its own; if the PC was off, the phone shows "This week's session is due" with a button to convene it. The phone runs the cheap daily watch whenever it is open and the watch is owed.
 
@@ -96,7 +83,7 @@ Both apps keep the shared record in a private GitHub repository. Set it up once:
 
 1. Create a **private** repository, for example `oazy-council-data`. Leave it empty.
 2. Create a fine-grained token at github.com, Settings, Developer settings, Personal access tokens, Fine-grained tokens. Give it access to **only that repository**, with **Contents: Read and write**. Nothing else.
-3. In the PC app (**Settings, Account sync**) and in the phone app (**Settings, Account**), enter `you/oazy-council-data` and paste the token.
+3. In Oazy Research (**Council, Settings, Account sync**) and in the phone app (**Settings, Account**), enter `you/oazy-council-data` and paste the token.
 
 What is shared: the ledger, the watch log, every session transcript, the shared settings (budget, schedule, watch) and a live status. What is never shared: API keys, the token itself, the SEC contact, and the market-data caches. The repository can be public if you want an open, verifiable record: anyone could then read the portfolio, the ledger and every transcript, but only your token can write to it. When one device is in session, the other shows "In session on ..." with the current step and will not start a second session; its result arrives when it ends. If both devices record a decision while apart, the ledger chains are joined, so nothing is lost and the hash chain still verifies.
 
@@ -122,18 +109,19 @@ node engine/cli.js verify                      # check the ledger's hash chain
 npm test                                       # offline tests
 ```
 
-The app and the command line share one data folder: `%APPDATA%\Oazy Council\data` (or set `OAZY_COUNCIL_DATA`). Sessions, market books, the ledger, the watch log and the price cache are all plain JSON in that folder.
+Oazy Research and the command line share one data folder: `%APPDATA%\Oazy Council\data` (or set `OAZY_COUNCIL_DATA`). Sessions, market books, the ledger, the watch log and the price cache are all plain JSON in that folder.
 
 ## Layout
 
 ```
-main.js, preload.js     the desktop app: window, tray, scheduler
-app/                    the desktop window (chamber, portfolio, record, sessions, settings)
-mobile/                 the phone screens and core.bundle.js (the engine built for the phone)
-phone/                  the phone's engine entry and its small Node shims; `node phone/build.js` rebuilds the bundle
-android/                the Android shell and its build script
 engine/                 data, metrics, prompts, the session, rules, ledger, watch, account sync (sync.js), the shared core (core.js), CLI
+mobile/                 the phone screens and core.bundle.js (the engine built for the phone)
+phone/                  the phone's engine entry and its small Node shims; `npm run bundle` rebuilds core.bundle.js
+android/                the Android shell and its build script
+release/                the signed APK
 test/                   offline tests
 ```
+
+The desktop screens are in `../research/app/council.*`; Oazy Research ships a copy of `engine/`.
 
 This is a research tool and a paper-trading record, not financial advice.
