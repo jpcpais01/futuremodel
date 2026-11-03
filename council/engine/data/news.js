@@ -23,7 +23,7 @@ function parseRSS(xml, src) {
 }
 
 async function feed(url, src, { signal } = {}) {
-  try { return parseRSS(await get(url, { signal, tries: 2, timeout: 15000 }), src); } catch (e) { if (signal?.aborted) throw e; return []; }
+  try { return parseRSS(await get(url, { signal, tries: 1, timeout: 12000 }), src); } catch (e) { if (signal?.aborted) throw e; return []; }
 }
 
 function tidy(items, days, cutoff, max) {
@@ -35,20 +35,23 @@ function tidy(items, days, cutoff, max) {
 }
 
 /* Headlines per ticker from the last `days` days, newest first. Only items published before `cutoff` are kept. */
-async function companyNews(universe, { signal, days = 10, max = 10, cutoff = Date.now(), onProgress = () => {} } = {}) {
+async function companyNews(universe, { signal, days = 10, max = 10, cutoff = Date.now(), onProgress = () => {}, into = {} } = {}) {
   const rel = 'news/companies.json';
   const c = store.readJSON(rel);
-  if (c && store.age(rel) < 3 * 3600e3 && universe.every(([t]) => c[t])) return c;
-  const out = {}; let done = 0;
+  if (c && store.age(rel) < 3 * 3600e3 && universe.every(([t]) => c[t])) return Object.assign(into, c);
+  const out = into; let done = 0, gMiss = 0;
   await pool(universe, 3, async ([t, name, , kind]) => {
+    if (signal?.aborted) return;
     const q = kind === 'E' ? `"${t}" ETF` : `"${name.replace(/&/g, 'and')}" OR "${t}" stock`;
     const g = `https://news.google.com/rss/search?q=${encodeURIComponent(q + ` when:${days}d`)}&hl=en-US&gl=US&ceid=US:en`;
-    let items = await feed(g, 'Google News', { signal });
+    // If Google keeps answering with nothing (it throttles some networks), stop asking it and use Yahoo alone.
+    let items = gMiss < 6 ? await feed(g, 'Google News', { signal }) : [];
+    gMiss = items.length ? 0 : gMiss + 1;
     if (items.length < 3) items = items.concat(await feed(`https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(t)}&region=US&lang=en-US`, 'Yahoo Finance', { signal }));
     out[t] = tidy(items, days, cutoff, max).map(({ title, source, t: ts }) => ({ title, source, t: ts }));
     onProgress(++done, universe.length);
-  });
-  store.writeJSON(rel, out);
+  }).catch((e) => { if (!signal?.aborted) throw e; });
+  if (universe.every(([t]) => out[t])) store.writeJSON(rel, out);   // only a complete set is cached
   return out;
 }
 

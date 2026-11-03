@@ -15,9 +15,11 @@ const SEAT = {}, UNI = {};
 
 function toast(m, err) { const t = $('#toast'); t.textContent = m; t.className = 'on' + (err ? ' err' : ''); clearTimeout(toast.t); toast.t = setTimeout(() => (t.className = ''), 3800); }
 
+if (window.Native) document.documentElement.classList.add('native');
+
 /* The engine: the same council core the PC app runs. */
 const OC = window.OazyCore.create({
-  onEvents: (list) => list.forEach((e) => (e.type === 'log' ? toast(e.text) : handle(e))),
+  onEvents: (list) => list.forEach((e) => (e.type === 'log' && !sess ? toast(e.text) : handle(e))),
   onChanged: (why) => { if (why === 'running') return; refresh(); },
 });
 
@@ -144,7 +146,8 @@ function handle(e) {
   if (!sess) return;
   switch (e.type) {
     case 'phase': $('#c-phase').textContent = e.label; $('#l-step').textContent = `Step ${e.i + 1} of ${e.n}`; $('#l-bar').style.width = ((e.i + 1) / e.n) * 100 + '%'; break;
-    case 'progress': if (e.key === 'prices' || e.key === 'analysts') $('#c-sub').textContent = `${e.label} ${e.done} / ${e.total}`; break;
+    case 'progress': $('#c-sub').textContent = e.total > 1 ? `${e.label} ${e.done} / ${e.total}` : `${e.label}…`; break;
+    case 'log': sysLine(e.text); break;
     case 'desk': if (e.state === 'reading') Ch.reading(e.tickers, true); else if (e.reports) { e.reports.forEach((r) => Ch.verdict(r.t, r.v)); sess.reports += e.reports.filter((r) => r.v).length; $('#c-sub').textContent = `${sess.reports} of ${S.universe.length} names read`; } break;
     case 'turn': sess.seats[e.seat] = { state: 'thinking', text: '', label: roundLabel(e) }; Ch.seat(e.seat, 'thinking'); if (!sess.focus || sess.seats[sess.focus]?.state === 'done') focus(e.seat); break;
     case 'speak': { const st = sess.seats[e.seat] || (sess.seats[e.seat] = { label: '' }); st.state = 'speaking'; st.text = e.text; Ch.seat(e.seat, 'speaking'); if (!sess.focus || sess.seats[sess.focus]?.state !== 'speaking') focus(e.seat); if (sess.focus === e.seat) paint(); break; }
@@ -162,6 +165,7 @@ function handle(e) {
     case 'failed': toast(e.error === 'Cancelled' ? 'Session adjourned.' : 'Session failed: ' + e.error, e.error !== 'Cancelled'); sess = null; Ch.reset(); Ch.allPresent(); refresh(); break;
   }
 }
+function sysLine(text) { $('#feed').insertAdjacentHTML('afterbegin', `<div class="st sys"><p>${esc(text)}</p></div>`); }
 function focus(k) {
   sess.focus = k; const d = SEAT[k]; if (!d) return;
   $('#floor').classList.remove('hidden'); $('#floor').style.setProperty('--c', d.color);

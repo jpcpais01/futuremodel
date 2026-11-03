@@ -76,11 +76,12 @@ const quarterlyShares = (facts) => { const q = facts.filter((f) => f.s && dur(f)
 const sum4 = (q, from) => (q.length >= from + 4 ? q.slice(q.length - from - 4, q.length - from).reduce((a, x) => a + x.v, 0) : null);
 
 /* For each ticker: trailing-twelve-month figures, growth, margins, free cash flow and shares outstanding. */
-async function fundamentals(tickers, { signal, log = () => {}, latestFiling = {} } = {}) {
+async function fundamentals(tickers, { signal, log = () => {}, latestFiling = {}, onProgress = () => {}, into = {} } = {}) {
   const map = await cikMap(signal);
-  const byTicker = {}; let done = 0;
+  const byTicker = into; let done = 0;
   log(`SEC fundamentals for ${tickers.length} companies (cached until each files a new report)`);
   await pool(tickers, 3, async (t) => {
+    if (signal?.aborted) return;
     const cik = map[t.replace('-', '.')] ?? map[t];
     if (!cik) { byTicker[t] = null; return; }
     const fresh = latestFiling[t] ? Date.parse(latestFiling[t]) + DAY : 0;
@@ -112,8 +113,8 @@ async function fundamentals(tickers, { signal, log = () => {}, latestFiling = {}
       cik, asOf: end, revTTM: r0, revGrowth: r0 && r1 ? r0 / r1 - 1 : null, revGrowthQ: yoy(0), revAccel: yoy(0) != null && yoy(1) != null ? yoy(0) - yoy(1) : null,
       niTTM: aligned(ni), opTTM: aligned(oi), gpTTM: aligned(gp), fcf: ocf.length >= 4 ? sum4(ocf, 0) - capexTTM : null, shares: sharesOut,
     };
-    if (++done % 25 === 0) log(`SEC fundamentals: ${done}/${tickers.length}`);
-  });
+    onProgress(++done, tickers.length);
+  }).catch((e) => { if (!signal?.aborted) throw e; });
   return { at: Date.now(), byTicker };
 }
 

@@ -9,7 +9,7 @@ async function fredSeries(id, signal) {
   if (c && store.age(rel) < 12 * 3600e3) return c;
   try {
     const from = new Date(Date.now() - 3 * 365 * 864e5).toISOString().slice(0, 10);
-    const csv = await get(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=${from}`, { signal, tries: 3, timeout: 40000, headers: { 'User-Agent': 'OazyCouncil/1.0' } });
+    const csv = await get(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=${from}`, { signal, tries: 2, timeout: 25000, headers: { 'User-Agent': 'OazyCouncil/1.0' } });
     const rows = csv.trim().split('\n').slice(1).map((l) => l.split(',')).filter((r) => r[1] && r[1] !== '.').map((r) => [r[0], +r[1]]).filter((r) => Number.isFinite(r[1]));
     const s = rows.slice(-800);
     store.writeJSON(rel, s);
@@ -30,7 +30,7 @@ function changes(s) {
 
 async function fred(list, { signal } = {}) {
   const out = {};
-  await pool(list, 2, async ([id, label, unit]) => { const c = changes(await fredSeries(id, signal)); if (c) out[id] = { label, unit, ...c }; });
+  await pool(list, 2, async ([id, label, unit]) => { if (signal?.aborted) return; const c = changes(await fredSeries(id, signal)); if (c) out[id] = { label, unit, ...c }; }).catch((e) => { if (!signal?.aborted) throw e; });
   return out;
 }
 

@@ -33,24 +33,33 @@ async function gather({ signal, emit, settings = {} }) {
   });
   health.prices = U.filter((u) => hist[u[0]]?.bars?.length > 25).length;
 
-  step('sec', 'SEC fundamentals');
+  // Every source after prices gets a time budget: a slow or blocked source must never hold the council up.
+  // What arrived in time is used; the rest is reported and left out.
+  const within = async (ms, what, fn) => {
+    const ac = new AbortController(), stop = () => ac.abort(); signal?.addEventListener('abort', stop);
+    let late = false; const t = setTimeout(() => { late = true; ac.abort(); }, ms * (+(typeof process !== 'undefined' && process.env?.OAZY_BUDGET_SCALE) || 1));   // the scale is for tests
+    try { return await fn(ac.signal); }
+    catch (e) { if (signal?.aborted) throw e; if (!late) emit({ type: 'log', text: `${what} unavailable: ${e.message}${/403/.test(e.message) && /sec/i.test(what) && !settings.secContact ? '. The SEC asks for a name and email: add one as SEC contact in Settings.' : ''}` }); return undefined; }
+    finally { clearTimeout(t); signal?.removeEventListener('abort', stop); if (late) emit({ type: 'log', text: `${what} took too long; continuing with what arrived.` }); }
+  };
+  step('sec', 'SEC filings');
   const stocks = U.filter((u) => u[3] === 'S').map((u) => u[0]);
   let fund = { byTicker: {} }, filings = {};
   let periodic = {};
-  try { const f = await sec.filings(stocks, { signal }); filings = f.recent; periodic = f.periodic; } catch (e) { if (signal?.aborted) throw e; emit({ type: 'log', text: 'SEC filings unavailable: ' + e.message }); }
-  try { fund = await sec.fundamentals(stocks, { signal, latestFiling: periodic, log: (t) => emit({ type: 'log', text: t }) }); } catch (e) { if (signal?.aborted) throw e; emit({ type: 'log', text: 'SEC fundamentals unavailable: ' + e.message }); }
-  health.fundamentals = Object.values(fund.byTicker).filter((f) => f && f.revTTM).length;
-  emit({ type: 'progress', key: 'sec', label: 'SEC fundamentals', done: 1, total: 1 });
+  const f = await within(90e3, 'SEC filings', (sg) => sec.filings(stocks, { signal: sg }));
+  if (f) { filings = f.recent; periodic = f.periodic; }
+  await within(240e3, 'SEC fundamentals', (sg) => sec.fundamentals(stocks, { signal: sg, latestFiling: periodic, into: fund.byTicker, onProgress: (d, n) => emit({ type: 'progress', key: 'sec', label: 'SEC fundamentals', done: d, total: n }) }));
+  health.fundamentals = Object.values(fund.byTicker).filter((x) => x && x.revTTM).length;
 
-  const cutoff = Date.now();
-  const news = await newsSrc.companyNews(U, { signal, cutoff, onProgress: (d, n) => emit({ type: 'progress', key: 'news', label: 'Company news', done: d, total: n }) });
+  const cutoff = Date.now(), news = {};
+  await within(120e3, 'Company news', (sg) => newsSrc.companyNews(U, { signal: sg, cutoff, into: news, onProgress: (d, n) => emit({ type: 'progress', key: 'news', label: 'Company news', done: d, total: n }) }));
   health.news = Object.values(news).filter((n) => n.length).length;
-  step('macro', 'Macro');
+  step('macro', 'Macro and rates');
   const [headlines, fred, vol, hl] = await Promise.all([
-    newsSrc.macroNews(C.MACRO_FEEDS, { signal, cutoff }).catch(() => []),
-    macroSrc.fred(C.FRED, { signal }).catch(() => ({})),
-    macroSrc.vol({ signal }).catch(() => ({})),
-    macroSrc.hyperliquid({ signal }).catch(() => ({})),
+    within(60e3, 'Macro headlines', (sg) => newsSrc.macroNews(C.MACRO_FEEDS, { signal: sg, cutoff })).then((x) => x || []),
+    within(60e3, 'FRED rates', (sg) => macroSrc.fred(C.FRED, { signal: sg })).then((x) => x || {}),
+    within(30e3, 'Volatility', (sg) => macroSrc.vol({ signal: sg })).then((x) => x || {}),
+    within(30e3, 'Hyperliquid', (sg) => macroSrc.hyperliquid({ signal: sg })).then((x) => x || {}),
   ]);
   health.fred = Object.keys(fred).length; health.headlines = headlines.length;
   emit({ type: 'progress', key: 'macro', label: 'Macro', done: 1, total: 1 });

@@ -17,6 +17,8 @@
   --r: 24px; --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
   --blur: blur(28px) saturate(170%);
 }
+/* In the Android app the frame already keeps clear of the bars. */
+.native { --safe-t: 0px; --safe-b: 0px; }
 /* Each screen tints the ambient light, the way a console home screen takes the colour of the selected game. */
 body[data-screen="council"]   { --accent: 104,140,255; --accent2: 255,196,92; }
 body[data-screen="portfolio"] { --accent: 46,214,168;  --accent2: 80,150,255; }
@@ -236,3 +238,7 @@ input:focus { border-color: rgba(var(--accent),.8); box-shadow: 0 0 0 4px rgba(v
 #toast.on { opacity: 1; transform: none; } #toast.err { color: #ffc6cf; border-color: rgba(255,112,136,.45); }
 
 @media (prefers-reduced-motion: reduce) { .orb { animation: none; } .screen.on { animation: none; } }
+
+.st.sys p { margin: 0; font-size: 12.5px; color: var(--tx3); }
+.st.sys p::before { content: 'i'; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; margin-right: 8px; font: 600 10px/1 var(--font); color: var(--tx2); background: rgba(255,255,255,.1); vertical-align: 1px; }
+#feed:empty { display: none; }
