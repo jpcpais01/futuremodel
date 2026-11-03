@@ -5,7 +5,7 @@ One app that holds several portfolios, each judged against the S&P 500 and the N
 | Portfolio | What it is | Where it trades |
 |---|---|---|
 | **Core v1.0** | A hand-built book of AI, regime and hedge positions with fixed rotation rules | Live, on Hyperliquid (read only: the app never trades) |
-| **Council** | A council of Claude agents that reads 155 names every week, debates, and holds what it judges the best portfolio | Paper, in a hash-chained ledger that fills at the next market open |
+| **Council** | A council of Claude agents that reads 155 names every week, debates, and holds what it judges the best portfolio | A paper index in a hash-chained ledger, entered at the open of each decision's trading day |
 
 Switch between them with the portfolio button next to the Oazy logo.
 

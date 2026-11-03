@@ -37,10 +37,12 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name)
     const f = store.p('l.jsonl'), lines = fs.readFileSync(f, 'utf8').trim().split('\n'); const e = JSON.parse(lines[0]); e.x = 9; lines[0] = JSON.stringify(e); fs.writeFileSync(f, lines.join('\n') + '\n');
     assert.strictEqual(ledger.verify('l.jsonl').ok, false);
   });
-  await t('ledger: decisions fill at the next regular open (ET)', () => {
+  await t('ledger: decisions enter at the open of their own trading day (ET)', () => {
     const days = ['2026-11-02', '2026-11-03', '2026-11-04'];
     assert.strictEqual(ledger.fillDate(Date.parse('2026-11-03T13:00:00Z'), days), '2026-11-03');   // 08:00 ET, before the open
-    assert.strictEqual(ledger.fillDate(Date.parse('2026-11-03T15:00:00Z'), days), '2026-11-04');   // 10:00 ET, after the open
+    assert.strictEqual(ledger.fillDate(Date.parse('2026-11-03T15:00:00Z'), days), '2026-11-03');   // 10:00 ET, after the open: same day's open
+    assert.strictEqual(ledger.fillDate(Date.parse('2026-11-03T22:30:00Z'), days), '2026-11-03');   // 17:30 ET, after the close
+    assert.strictEqual(ledger.fillDate(Date.parse('2026-11-04T03:00:00Z'), days), '2026-11-03');   // 22:00 ET, still Nov 3 in New York
     assert.strictEqual(ledger.fillDate(Date.parse('2026-11-01T01:00:00Z'), days), '2026-11-02');   // Saturday evening
   });
   await t('ledger: replay buys at the open, charges costs, tracks benchmarks', () => {
@@ -53,6 +55,8 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name)
     const last = r.series[r.series.length - 1];
     assert.ok(Math.abs(last.nav - (50000 * 1.2 + 50000 - 50000 * 0.001)) < 1, 'NAV ' + last.nav);   // AAA +20%, 10 bps on the trade
     assert.ok(Math.abs(last.spy / 100000 - 1.1) < 1e-9, 'SPY benchmark');
+    assert.ok(r.series[0].open && r.series[0].d === '2026-10-10T13:30:00.000Z' && r.series[0].spy === 100000, 'the record starts at the 09:30 open');
+    assert.strictEqual(r.stats.days, 4);
     assert.ok(r.verify.ok);
   });
   await t('metrics: returns and drawdown from adjusted prices', () => {

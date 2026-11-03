@@ -1,7 +1,7 @@
 {
   "name": "oazy-research",
   "productName": "Oazy Research",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Oazy Research: the Core portfolio and the AI council portfolio",
   "author": "Oazy",
   "main": "main.js",

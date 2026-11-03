@@ -31,10 +31,12 @@ async function cboe(sym, signal) {
   return { sym, src: 'cboe', bars, meta: { price: bars[bars.length - 1].c } };
 }
 
-async function history(sym, { signal, force = false } = {}) {
+/* need: a 'YYYY-MM-DD' the series should reach. A cache that stops short is refetched (at most every 10 minutes). */
+async function history(sym, { signal, force = false, need = null } = {}) {
   const rel = `prices/${sym.replace(/[^\w.-]/g, '_')}.json`;
-  const cached = store.readJSON(rel);
-  if (cached && !force && store.age(rel) < FRESH) return cached;
+  const cached = store.readJSON(rel), lastD = cached?.bars?.[cached.bars.length - 1]?.d;
+  const short = need && (!lastD || lastD < need) && store.age(rel) > 10 * 60e3;
+  if (cached && !force && !short && store.age(rel) < FRESH) return cached;
   let s = null;
   try { s = await yahoo(sym, '2y', signal); } catch (e) { if (signal?.aborted) throw e; }
   if (!s || s.bars.length < 30) { try { s = (await cboe(sym, signal)) || s; } catch (e) { if (signal?.aborted) throw e; } }
