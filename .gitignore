@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+# local data store, trained models and live logs (rebuild with `fm update` / `fm train`)
+data/
+models/
+signals/
+reports/_synthetic/
