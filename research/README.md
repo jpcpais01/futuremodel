@@ -23,7 +23,7 @@ npm run dist              # dist\OazyResearch-<version>.exe (portable) and an in
 
 ```
 main.js, preload.js        the window, tray, the council's schedule and its IPC
-app/index.html             Core v1.0, built from tools/index.src.html and tools/plan.js (both kept on the PC, not in git)
+app/index.html             Core v1.0, built from tools/index.src.html and tools/plan.js (plan.js and this page stay on the PC, not in git)
 app/oazy.css, oazy-kit.js  the shared look, sky and chart (built from tools/index.src.html)
 app/council.*              the Council portfolio's pages
 app/cx/                    ticker logos for the council's 155 names
