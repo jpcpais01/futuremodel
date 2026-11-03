@@ -169,12 +169,18 @@ class Calibrator:
     def __init__(self):
         self.std = None
         self.logit = (0.0, 1.0)   # P(up) = sigmoid(c0 + c1 * forecast)
+        self.slope = 1.0          # E[y_z | forecast] = slope * forecast (fit on past out-of-fold forecasts)
 
     def fit(self, forecast: np.ndarray, y: np.ndarray) -> "Calibrator":
         f = np.asarray(forecast, float)
         ok = np.isfinite(f) & np.isfinite(y)
         f, y = f[ok], y[ok]
         self.std = float(np.std(f)) if len(f) > 20 and np.std(f) > 0 else None
+        if len(f) > 20 and np.dot(f, f) > 0:
+            # raw tree outputs are not in return units: regress realised y on the forecast (no intercept,
+            # winsorised y). A negative slope means no demonstrated skill, so the expected move is set to 0.
+            yc = np.clip(y, -4, 4)
+            self.slope = float(max(0.0, np.dot(f, yc) / np.dot(f, f)))
         if len(f) > 50:
             from sklearn.linear_model import LogisticRegression
             lr = LogisticRegression(C=0.5).fit(f.reshape(-1, 1), (y > 0).astype(int))
@@ -193,7 +199,8 @@ def decide(forecast, sigma, cal: Calibrator, dcfg: config.DecisionConfig):
     """Position in [-max_size, max_size]. Trades only when the expected 10:30->close move beats the
     round-trip cost, and sizes linearly between the dead zone and full-size thresholds."""
     f = np.asarray(forecast, float)
-    exp_ret = f * np.asarray(sigma, float)                       # expected log return
+    slope = getattr(cal, "slope", 1.0)
+    exp_ret = slope * f * np.asarray(sigma, float)               # calibrated expected log return
     z = cal.z(f)
     size = np.clip((np.abs(z) - dcfg.dead_zone_z) / (dcfg.full_size_z - dcfg.dead_zone_z), 0, 1) * dcfg.max_size
     beats_cost = np.abs(exp_ret) * 1e4 > dcfg.cost_bps

@@ -197,9 +197,14 @@ def write_report(wf: dict, res: dict, out_dir: Path | None = None, meta: dict | 
     ]
     if hold:
         lo, hi = hold["sharpe_ci90"]
-        verdict = ("The holdout Sharpe interval excludes zero." if lo > 0 else
-                   "The holdout Sharpe interval includes zero: the edge is **not statistically established**. "
-                   "Paper-trade before risking money.")
+        if lo > 0:
+            verdict = "The holdout Sharpe interval excludes zero (still a small sample)."
+        elif hi < 0:
+            verdict = ("The whole holdout Sharpe interval is **below zero**: out of sample this model lost money "
+                       "with statistical confidence. **Do not trade it.**")
+        else:
+            verdict = ("The holdout Sharpe interval includes zero: the edge is **not statistically established**. "
+                       "Paper-trade before risking money.")
         lines += [f"Holdout: Sharpe **{hold['sharpe']:.2f}** (90% CI {lo:.2f} to {hi:.2f}), "
                   f"{hold['avg_bps_per_day']:.1f} bps/day net, hit rate {100 * hold['hit_rate']:.1f}% on {hold['trades']} trades "
                   f"over {hold['days']} days, max drawdown {100 * hold['max_drawdown']:.1f}%. {verdict}\n"]
@@ -224,6 +229,18 @@ def write_report(wf: dict, res: dict, out_dir: Path | None = None, meta: dict | 
     if len(pt):
         lines += ["", f"Per-ticker IC of the chosen variant: positive on {int((pt > 0).sum())} of {len(pt)} tickers, "
                       f"median {pt.median():.3f}.\n"]
+    rec = res["records"][ch]
+    q_ic = []
+    for qtr, g in rec.groupby(pd.Grouper(freq="QE")):
+        if len(g) >= 10:
+            s_ = summarize(g["net"], g["position"], None, 0)
+            q_ic.append(f"| {qtr.year}Q{qtr.quarter} | {len(g)} | {information_coefficient(g['forecast'], g['y_z']):+.3f} | "
+                        f"{s_['avg_bps_per_day']:+.2f} | {s_['sharpe']:+.2f} |")
+    if q_ic:
+        lines += ["## Stability over time (chosen variant, QQQ)\n",
+                  "A real edge should be positive in most quarters. A sign flip between periods means the model learned a "
+                  "pattern that the market stopped paying for.\n",
+                  "| quarter | days | IC | net bps/day | Sharpe |", "|---|---|---|---|---|", *q_ic, ""]
     lines += ["## By regime (chosen variant, all evaluated days, net)\n"]
     for name, ser in res["regimes"].items():
         lines += [f"**{name}**\n", "| bucket | days | bps/day | Sharpe | hit % |", "|---|---|---|---|---|"]

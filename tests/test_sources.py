@@ -43,3 +43,18 @@ def test_gex_and_news_offline():
     sc, backend = score_headlines(["Nasdaq surges to record", "Chipmakers plunge on export ban"], backend="lexicon")
     assert sc[0]["score"] > 0 > sc[1]["score"]
     assert aggregate([{"title": "a", "source": "x"}, {"title": "b", "source": "y"}], sc)["n"] == 2
+
+
+def test_hourly_ready_detects_grid(tmp_path):
+    from futuremodel.data.store import Store
+    from futuremodel.live.signal import _hourly_ready
+    st = Store(tmp_path)
+    tz = "America/New_York"
+    for name, first in (("QQQ", "09:30"), ("^VIX", "09:00")):
+        idx = pd.DatetimeIndex([pd.Timestamp(f"2026-10-{d} {first}", tz=tz) + pd.Timedelta(hours=h)
+                                for d in (28, 29, 30) for h in range(6)])
+        st.write("intraday_60m", name, pd.DataFrame({"close": 1.0}, index=idx))
+    cutoff_old = pd.Timestamp("2026-10-30 10:30", tz=tz)
+    cutoff_new = pd.Timestamp("2026-11-02 10:30", tz=tz)
+    assert _hourly_ready(st, "QQQ", cutoff_old) and _hourly_ready(st, "^VIX", cutoff_old)
+    assert not _hourly_ready(st, "QQQ", cutoff_new) and not _hourly_ready(st, "SPY", cutoff_new)

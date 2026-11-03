@@ -11,7 +11,7 @@ from .. import config
 from .store import Store
 
 log = logging.getLogger(__name__)
-UA = {"User-Agent": "Mozilla/5.0 (futuremodel research)"}
+UA = {"User-Agent": "futuremodel/0.1 (research script)"}
 
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}"
 CBOE_CSV = "https://cdn.cboe.com/api/global/us_indices/daily_prices/{name}_History.csv"
@@ -19,7 +19,8 @@ CBOE_CSV = "https://cdn.cboe.com/api/global/us_indices/daily_prices/{name}_Histo
 
 def fetch_fred(series_id: str) -> pd.DataFrame | None:
     try:
-        r = requests.get(FRED_CSV.format(sid=series_id), headers=UA, timeout=30)
+        # FRED's firewall stalls requests carrying custom User-Agent strings; the library default works.
+        r = requests.get(FRED_CSV.format(sid=series_id), timeout=60)
         r.raise_for_status()
         df = pd.read_csv(io.StringIO(r.text))
         df.columns = ["date", "value"]

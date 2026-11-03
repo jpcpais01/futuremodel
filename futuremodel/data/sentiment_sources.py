@@ -16,14 +16,13 @@ import requests
 from .store import Store
 
 log = logging.getLogger(__name__)
-BROWSER_UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                            "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
+HTTP_UA = {"User-Agent": "futuremodel/0.1 (research script)"}
 
 
 def fetch_cnn_fear_greed(start: str = "2020-01-01") -> pd.DataFrame | None:
     url = f"https://production.dataviz.cnn.io/index/fearandgreed/graphdata/{start}"
     try:
-        r = requests.get(url, headers=BROWSER_UA, timeout=30)
+        r = requests.get(url, headers=HTTP_UA, timeout=30)
         r.raise_for_status()
         data = r.json()["fear_and_greed_historical"]["data"]
         df = pd.DataFrame(data)
@@ -38,7 +37,7 @@ def fetch_cnn_fear_greed(start: str = "2020-01-01") -> pd.DataFrame | None:
 def fetch_aaii() -> pd.DataFrame | None:
     url = "https://www.aaii.com/files/surveys/sentiment.xls"
     try:
-        r = requests.get(url, headers=BROWSER_UA, timeout=60)
+        r = requests.get(url, headers=HTTP_UA, timeout=60)
         r.raise_for_status()
         raw = pd.read_excel(io.BytesIO(r.content), header=None)
     except Exception as e:
@@ -67,7 +66,7 @@ def _gdelt(mode: str, start: datetime, end: datetime) -> pd.Series | None:
     params = dict(query=GDELT_QUERY, mode=mode, format="json",
                   startdatetime=start.strftime("%Y%m%d%H%M%S"), enddatetime=end.strftime("%Y%m%d%H%M%S"))
     try:
-        r = requests.get(GDELT_URL, params=params, headers=BROWSER_UA, timeout=60)
+        r = requests.get(GDELT_URL, params=params, headers=HTTP_UA, timeout=60)
         r.raise_for_status()
         tl = r.json().get("timeline", [])
         if not tl:

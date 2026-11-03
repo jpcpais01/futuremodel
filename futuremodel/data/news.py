@@ -34,7 +34,7 @@ def fetch_rss(cutoff: pd.Timestamp, lookback_hours: int = 20) -> list[dict]:
     items = []
     for src, url in RSS_FEEDS.items():
         try:
-            feed = feedparser.parse(url, agent="Mozilla/5.0")
+            feed = feedparser.parse(url, agent="futuremodel/0.1 (research script)")
             for e in feed.entries:
                 ts = e.get("published_parsed") or e.get("updated_parsed")
                 if not ts:

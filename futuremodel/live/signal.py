@@ -58,6 +58,22 @@ def _fmt_pct(x, nd=2):
     return "n/a" if x is None or not np.isfinite(x) else f"{x:+.{nd}f}%"
 
 
+def _hourly_ready(store: Store, ticker: str, cutoff: pd.Timestamp) -> bool:
+    """True if the stored 60-minute bars already contain today's last full bar ending at or before `cutoff`."""
+    b = store.read("intraday_60m", ticker)
+    if b is None or b.empty:
+        return False
+    idx = pd.DatetimeIndex(b.index).tz_convert(config.TZ)
+    past = idx[idx < cutoff.normalize()]
+    if len(past) == 0:
+        return False
+    offset = int(pd.Series(past[-200:].minute).mode().iloc[0])          # the ticker's hourly grid (:30, :00, ...)
+    last_end = cutoff.floor("h") + pd.Timedelta(minutes=offset)
+    if last_end > cutoff:
+        last_end -= pd.Timedelta(hours=1)
+    return bool(((idx + pd.Timedelta(minutes=60)) == last_end).any())
+
+
 def build_today(store: Store, now: pd.Timestamp, refresh: bool = True, minutes: dict | None = None) -> pd.DataFrame:
     from ..data import macro, sentiment_sources, yahoo
     today = now.normalize().tz_localize(None)
@@ -70,6 +86,11 @@ def build_today(store: Store, now: pd.Timestamp, refresh: bool = True, minutes: 
         minutes = yahoo.fetch_today_minutes(LIVE_INTRADAY)
     # strict cutoff: drop any 1-minute bar that ends after the decision time
     cutoff = today.tz_localize(config.TZ) + pd.Timedelta(hours=config.DECISION_HOUR, minutes=config.DECISION_MINUTE)
+    # Train/serve consistency: the model was trained on Yahoo 60-minute bars. 1-minute bars differ from them
+    # (volume totals are not comparable, and instruments on an hourly grid such as ^VIX were only ever seen at
+    # their last full hour). So whenever today's 60-minute bars up to 10:30 are already available, use them
+    # and keep the 1-minute bars only as a fallback.
+    minutes = {t: b for t, b in minutes.items() if not _hourly_ready(store, t, cutoff)}
     clean = {}
     for t, b in minutes.items():
         idx = pd.DatetimeIndex(b.index).tz_convert(config.TZ)
@@ -118,6 +139,9 @@ def run_signal(store: Store | None = None, model_path: Path | None = None, now: 
         if cov < 0.5:
             warnings.append(f"{f}: only {100 * cov:.0f}% of inputs available today.")
     last_bar = mins.get(config.TARGET).index.max() if config.TARGET in mins else None
+    if row.get("source") == "live":
+        warnings.append("Yahoo's 60-minute bar for 09:30-10:30 was not available yet, so 1-minute bars were used. "
+                        "First-hour volume features are not directly comparable with training; re-run in a few minutes.")
     if row.get("c_is_fomc") == 1:
         warnings.append("FOMC statement at 14:00 ET today: afternoon variance is much larger than usual.")
     if cal.is_half_day(today):
