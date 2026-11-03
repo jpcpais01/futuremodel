@@ -55,15 +55,26 @@ async function syncAndCheck() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) syncAndCheck(); });
 
-function setMode(d) { demo = d; LS.set('demo', d); const b = $('#mode'); b.textContent = d ? 'Demo' : 'Paper'; b.classList.toggle('demo', d); $('#demo').checked = d; }
-$('#mode').onclick = () => { setMode(!demo); renderIdle(); if (screen !== 'council') show(screen); };
+function setMode(d) {
+  demo = d; LS.set('demo', d); $('#demo').checked = d;
+  $('#mode').classList.toggle('demo', d); $$('#mode button').forEach((b) => b.classList.toggle('on', (b.dataset.m === 'demo') === d));
+}
+$$('#mode button').forEach((b) => (b.onclick = () => { const d = b.dataset.m === 'demo'; if (d === demo) return; setMode(d); renderIdle(); if (screen !== 'council') show(screen); }));
 $$('#tabs button').forEach((b) => (b.onclick = () => show(b.dataset.s)));
+const TABS = ['council', 'portfolio', 'record', 'sessions', 'settings'];
 function show(s) {
-  screen = s; window.scrollTo(0, 0);
-  $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.s === s || (s === 'session' && b.dataset.s === 'sessions')));
+  const same = s === screen; screen = s; if (!same) window.scrollTo(0, 0);
+  document.body.dataset.screen = s;
+  const tab = s === 'session' ? 'sessions' : s;
+  $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.s === tab));
+  $('.tab-glow').style.transform = `translateX(${TABS.indexOf(tab) * 100}%)`;
   $$('.screen').forEach((x) => x.classList.toggle('on', x.id === 's-' + s));
   if (s === 'portfolio') renderPortfolio(); if (s === 'record') renderRecord(); if (s === 'sessions') renderSessions(); if (s === 'settings') renderSettings();
 }
+/* A steady colour for each sector, used by the ticker badges. */
+const hueOf = (t) => { const sec = UNI[t]?.s || t; let h = 0; for (const c of sec) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const av = (t, lg) => `<span class="av${lg ? ' lg' : ''}" style="--h:${hueOf(t)}">${esc(String(t).slice(0, 4))}</span>`;
+const chip = (t, w) => `<span class="chip">${av(t)}<b>${esc(t)}</b>${fw(w)}</span>`;
 
 /* ── Council ─────────────────────────────────────────────────────────── */
 function renderIdle() {
@@ -74,15 +85,20 @@ function renderIdle() {
   $('#conv').classList.toggle('hidden', !!S.running || (!!elsewhere && !demo));
   const due = !demo && S.due && S.hasKey && !elsewhere && !S.running;
   $('#due').classList.toggle('hidden', !due);
-  $('#presets').innerHTML = ['low', 'normal', 'high'].map((k) => `<button class="preset ${k === preset ? 'on' : ''}" data-k="${k}"><b>${S.presets[k].label}</b><span>${demo ? 'free' : '~' + money(S.presets[k].est.mid)}</span></button>`).join('');
-  $$('#presets .preset').forEach((b) => (b.onclick = () => { preset = b.dataset.k; renderIdle(); }));
-  $('#go').disabled = !demo && !S.hasKey; $('#go').textContent = !demo && !S.hasKey ? 'Paste your API key in Settings' : demo ? 'Convene (demo)' : 'Convene';
+  renderPresets();
+  const noKey = !demo && !S.hasKey;
+  $('#go').disabled = false; $('#go').textContent = noKey ? 'Add API key' : 'Convene';
+  $('#go').onclick = noKey ? () => show('settings') : () => convene(preset, demo);
   if (!live) {
     if (elsewhere && !demo) { $('#c-phase').textContent = 'In session on ' + elsewhere.device; $('#c-sub').textContent = (elsewhere.phase?.label || 'Convening') + (elsewhere.last?.text ? ' · ' + elsewhere.last.text.slice(0, 90) + '…' : ''); }
     else { $('#c-phase').textContent = S.running ? 'In session' : 'Adjourned'; $('#c-sub').textContent = ''; }
     P = OC.portfolio(demo);
     const f = P?.final;
-    $('#last').innerHTML = f ? `<div class="eyebrow">${demo ? 'Demo · ' : ''}Latest decision · ${when(P.decidedAt)}</div><h3>${f.holdings.length} holdings, ${fw(f.cash_pct)} cash</h3><p>${esc(f.summary)}</p><div class="chips">${f.holdings.slice().sort((a, b) => b.weight - a.weight).map((h) => `<span class="chip"><b>${esc(h.ticker)}</b> ${fw(h.weight)}</span>`).join('')}</div>` : `<div class="eyebrow">No decision yet</div><p style="margin-top:6px">The council has not met${demo ? ' in demo mode' : ''}. Convene it here or on the PC.</p>`;
+    $('#last').innerHTML = f ? `<div class="l-top"><span class="eyebrow">${demo ? 'Demo · ' : ''}${when(P.decidedAt)}</span><span class="grow"></span>${P.decidedOn ? `<span class="tag">${esc(P.decidedOn)}</span>` : ''}</div>
+      <h3>${f.holdings.length} holdings · ${fw(f.cash_pct)} cash</h3><p>${esc(f.summary)}</p>
+      <div class="chips">${f.holdings.slice().sort((a, b) => b.weight - a.weight).map((h) => chip(h.ticker, h.weight)).join('')}</div>`
+      : `<span class="eyebrow">No decision yet</span><h3>The council has not met${demo ? ' in demo mode' : ''}</h3><p>Pick a budget above and convene it. ${demo ? 'Demo runs are free.' : 'It reads all 155 names, debates, and decides what to hold.'}</p>`;
+    $('#last').onclick = f ? () => show('portfolio') : null;
     if (f && !sess) Ch.final(f.holdings, false);
   }
 }
@@ -91,9 +107,28 @@ function convene(p, d) {
   $('#go').disabled = true; $('#due-go').disabled = true;
   OC.run(p, d).catch((e) => { toast(e.message, true); if (sess && !sess.ended) { sess = null; Ch.reset(); Ch.allPresent(); } }).finally(() => { $('#due-go').disabled = false; refresh(); });
 }
-$('#go').onclick = () => convene(preset, demo);
 $('#due-go').onclick = () => convene(S.settings.preset, false);
 $('#l-cancel').onclick = () => { OC.cancel(); $('#l-cancel').disabled = true; toast('Adjourning after the current call.'); };
+
+/* Budget presets as console-style tiles: swipe or tap; the selected one lifts and glows. */
+const ART = { low: ['#2b6cff', '#1fd1c1', '43,108,255'], normal: ['#8a5cff', '#ff6fae', '138,92,255'], high: ['#ffb547', '#ff5d6c', '255,150,70'] };
+function constel(k) {
+  const p = S.presets[k], keys = [...p.members, ...(p.redTeam ? ['vex'] : []), 'sentinel', 'arbiter'];
+  return `<svg class="constel" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">${keys.map((m, i) => { const a = (i / keys.length) * 6.283 - 1.57, r = m === 'arbiter' ? 0 : 26, x = 62 + Math.cos(a) * r, y = 38 + Math.sin(a) * r;
+    return `<line x1="62" y1="38" x2="${x}" y2="${y}" stroke="rgba(255,255,255,.18)" stroke-width=".5"/><circle cx="${x}" cy="${y}" r="${m === 'arbiter' ? 5 : 3}" fill="${SEAT[m]?.color || '#fff'}"/>`; }).join('')}</svg>`;
+}
+function renderPresets() {
+  const box = $('#presets');
+  if (box.dataset.demo !== String(demo) || !box.children.length) {
+    box.dataset.demo = String(demo);
+    box.innerHTML = ['low', 'normal', 'high'].map((k) => { const a = ART[k], p = S.presets[k];
+      return `<button class="tile" data-k="${k}" style="--art:radial-gradient(120% 90% at 85% 10%, ${a[0]}cc, transparent 60%), linear-gradient(160deg, ${a[0]}55, ${a[1]}66 70%, #0b0e1a);--glow:${a[2]}">${constel(k)}<span class="t-name">${esc(p.label)}</span><span class="t-cost">${demo ? 'Free demo' : '~' + money(p.est.mid) + ' a session'}</span></button>`; }).join('') + '<span style="flex:none;width:1px"></span>';
+    $$('#presets .tile').forEach((b) => (b.onclick = () => { preset = b.dataset.k; renderPresets(); b.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }));
+  }
+  $$('#presets .tile').forEach((b) => b.classList.toggle('on', b.dataset.k === preset));
+  const p = S.presets[preset];
+  $('#preset-info').innerHTML = `<b>${p.members.length} seats on ${esc(p.models.member)}</b><p>${p.rounds ? p.rounds + ' debate round' + (p.rounds > 1 ? 's' : '') : 'No debate round'}${p.redTeam ? ', a red team' : ''}${p.rebuttal ? ', rebuttals' : ''}${p.scout ? ', a web scout' : ''}. About ${p.est.calls} calls${demo ? '' : `, ${money(p.est.low)} to ${money(p.est.high)}`}.</p>`;
+}
 
 const roundLabel = (e) => ({ redteam: 'Red team', risk: 'Risk review', chair: 'Decision', scout: 'Briefing' }[e.kind] || (e.round === 1 ? 'Round 1' : e.round === 9 ? 'Rebuttal' : 'Debate ' + (e.round - 1)));
 function handle(e) {
@@ -135,71 +170,90 @@ function focus(k) {
 function paint() { const st = sess.seats[sess.focus] || {}; $('#f-round').textContent = st.label || ''; $('#f-text').innerHTML = st.text ? esc(st.text) + (st.state === 'speaking' ? '<span class="caret"></span>' : '') : '<span style="color:var(--tx3)">Thinking…</span>'; }
 function feed(e, text, d) {
   const s = SEAT[e.seat] || { name: e.seat, color: '#999' };
-  const chips = (d.picks || d.holdings || []).slice().sort((a, b) => b.weight - a.weight).slice(0, 8).map((p) => `<span class="chip"><b>${esc(p.ticker)}</b> ${fw(p.weight)}</span>`).join('');
-  $('#feed').insertAdjacentHTML('afterbegin', `<div class="st"><div class="st-h"><b style="color:${s.color}">${esc(s.name)}</b><span>${esc(roundLabel(e))}</span></div><p>${esc(text)}</p>${chips ? `<div class="chips">${chips}</div>` : ''}</div>`);
+  const chips = (d.picks || d.holdings || []).slice().sort((a, b) => b.weight - a.weight).slice(0, 8).map((p) => chip(p.ticker, p.weight)).join('');
+  $('#feed').insertAdjacentHTML('afterbegin', `<div class="st"><div class="st-h"><b style="color:${s.color}">${esc(s.name)}</b><span class="grow"></span><span class="tag">${esc(roundLabel(e))}</span></div><p>${esc(text)}</p>${chips ? `<div class="chips">${chips}</div>` : ''}</div>`);
 }
 
 /* ── Portfolio ───────────────────────────────────────────────────────── */
+const kpi = (a, b, c) => `<div class="glass kpi"><div class="eyebrow">${a}</div><span class="num">${b}</span><small>${c}</small></div>`;
 function renderPortfolio() {
   P = OC.portfolio(demo);
   const f = P.final, st = P.stats, nav = P.series.length ? P.series[P.series.length - 1][1] : P.capital;
-  $('#pf-asof').textContent = f ? `${demo ? 'Demo · ' : ''}decided ${when(P.decidedAt)}` : demo ? 'Demo record' : 'Paper record';
-  if (!f) { $('#pf-kpis').innerHTML = ''; $('#pf-sum').textContent = 'No decision yet.'; $('#pf-list').innerHTML = ''; $('#pf-note').classList.add('hidden'); return; }
-  $('#pf-kpis').innerHTML = [['Paper value', money(nav, 0), st ? `<span class="${cls(st.ret)}">${pc(st.ret)}</span> since start` : 'starting capital'],
-    ['vs Nasdaq 100', st?.qqq != null ? `<span class="${cls(st.ret - st.qqq)}">${pc(st.ret - st.qqq)}</span>` : '—', st?.qqq != null ? `QQQ ${pc(st.qqq)}` : 'once filled'],
-    ['vs S&P 500', st?.spy != null ? `<span class="${cls(st.ret - st.spy)}">${pc(st.ret - st.spy)}</span>` : '—', st?.spy != null ? `SPY ${pc(st.spy)}` : 'once filled'],
-    ['Confidence', (f.confidence ?? '—') + '<small style="display:inline">/100</small>', `${f.holdings.length} holdings, ${fw(f.cash_pct)} cash`]]
-    .map(([a, b, c]) => `<div class="kpi"><div class="eyebrow">${a}</div><div class="num">${b}</div><small>${c}</small></div>`).join('');
+  $('#pf-asof').textContent = f ? `${demo ? 'Demo · ' : ''}Paper value · decided ${when(P.decidedAt)}` : demo ? 'Demo record' : 'Paper value';
+  const [whole, cents] = money(nav, 2).split('.');
+  $('#pf-value').innerHTML = `${whole}<small>.${cents}</small>`;
+  $('#pf-change').innerHTML = st ? `<b class="${cls(st.ret)}">${pc(st.ret)}</b> since the first decision` : 'Starting capital, fills at the next open after a decision';
+  ['#pf-sumcard', '#pf-watch', '#pf-watchwrap'].forEach((x) => $(x).classList.toggle('hidden', !f));
+  if (!f) { $('#pf-kpis').innerHTML = ''; $('#pf-list').innerHTML = '<div class="fine">No decision yet. Convene the council to build the first portfolio.</div>'; $('#pf-count').textContent = ''; $('#pf-note').classList.add('hidden'); return; }
+  $('#pf-kpis').innerHTML = kpi('vs Nasdaq 100', st?.qqq != null ? `<span class="${cls(st.ret - st.qqq)}">${pc(st.ret - st.qqq)}</span>` : '—', st?.qqq != null ? `QQQ ${pc(st.qqq)}` : 'once filled')
+    + kpi('vs S&P 500', st?.spy != null ? `<span class="${cls(st.ret - st.spy)}">${pc(st.ret - st.spy)}</span>` : '—', st?.spy != null ? `SPY ${pc(st.spy)}` : 'once filled')
+    + kpi('Confidence', `${f.confidence ?? '—'}<small style="display:inline;font-size:13px">/100</small>`, 'from the chair')
+    + kpi('Cash', fw(f.cash_pct), `${f.holdings.length} holdings`);
   $('#pf-note').classList.toggle('hidden', !P.pending?.length); $('#pf-note').textContent = 'The latest decision fills at the next market open (9:30 ET).';
   $('#pf-sum').textContent = f.summary;
+  $('#pf-count').textContent = `${f.holdings.length} names`;
   const pos = Object.fromEntries((P.positions || []).map((p) => [p.t, p])), max = Math.max(...f.holdings.map((h) => h.weight));
   $('#pf-list').innerHTML = f.holdings.slice().sort((a, b) => b.weight - a.weight).map((h) => { const p = pos[h.ticker];
-    return `<div class="hold"><div class="hold-top"><span class="t">${esc(h.ticker)}</span>${P.hl?.[h.ticker] ? '<span class="hl">HL</span>' : ''}<span class="n">${esc(UNI[h.ticker]?.n || '')}</span><span class="w">${fw(h.weight)}</span></div>
+    return `<div class="hold" style="--h:${hueOf(h.ticker)}"><div class="hold-top">${av(h.ticker, true)}
+        <div class="hold-name"><b>${esc(h.ticker)}${P.hl?.[h.ticker] ? '<span class="hl">HL</span>' : ''}</b><span>${esc(UNI[h.ticker]?.n || '')}</span></div>
+        <div class="hold-w"><b>${fw(h.weight)}</b>${p ? `<span class="${cls(p.pnlPct)}">${pc(p.pnlPct)}</span>` : '<span>pending</span>'}</div></div>
       <div class="wbar"><i style="width:${(h.weight / max) * 100}%"></i></div>
-      <div class="hold-meta"><span class="stars">${'★'.repeat(h.conviction || 0)}<s>${'★'.repeat(5 - (h.conviction || 0))}</s></span><span class="grow"></span>${p ? `<span class="${cls(p.pnlPct)}">${pc(p.pnlPct)}</span>` : '<span>pending</span>'}</div>
-      <div class="why">${esc(h.thesis)}<em><b>Sell if</b> ${esc(h.rotate_if)}</em><em>Backed by ${esc((h.champions || []).join(', ') || '—')}</em></div></div>`; }).join('');
+      <div class="why"><div><span class="stars">${'★'.repeat(h.conviction || 0)}<s>${'★'.repeat(5 - (h.conviction || 0))}</s></span><br>${esc(h.thesis)}<em><b>Sell if</b> ${esc(h.rotate_if)}</em><em>Backed by ${esc((h.champions || []).join(', ') || '—')}</em></div></div></div>`; }).join('');
   $$('#pf-list .hold').forEach((el) => (el.onclick = () => el.classList.toggle('open')));
   $('#pf-watch').classList.toggle('hidden', !demo && !S.hasKey);
-  $('#pf-watchlog').innerHTML = (P.watch || []).slice(0, 6).map((w) => `<div class="wl"><small>${when(w.at)}${w.convene ? ' · called for a session' : ''}</small>${esc(w.statement)}</div>`).join('');
+  const wl = (P.watch || []).slice(0, 6);
+  $('#pf-watchwrap').classList.toggle('hidden', !wl.length);
+  $('#pf-watchlog').innerHTML = wl.map((w) => `<div class="wl"><small>${when(w.at)}${w.convene ? ' · called for a session' : ''}</small>${esc(w.statement)}</div>`).join('');
 }
-$('#pf-watch').onclick = async () => { $('#pf-watch').disabled = true; try { const r = await OC.watch(demo); if (r.error) throw new Error(r.error); toast(r.statement || 'Watch complete'); renderPortfolio(); } catch (e) { toast(e.message, true); } finally { $('#pf-watch').disabled = false; } };
+$('#pf-watch').onclick = async () => { $('#pf-watch').disabled = true; $('#pf-watch').textContent = 'Watching…'; try { const r = await OC.watch(demo); if (r.error) throw new Error(r.error); toast(r.statement || 'Watch complete'); renderPortfolio(); } catch (e) { toast(e.message, true); } finally { $('#pf-watch').disabled = false; $('#pf-watch').textContent = 'Run the watch now'; } };
 
 /* ── Record ──────────────────────────────────────────────────────────── */
 function renderRecord() {
   P = OC.portfolio(demo); P.verify = OC.verify(demo);
-  const st = P.stats, ser = P.series;
-  $('#rc-kpis').innerHTML = st && ser.length > 1 ? [['Council', pc(st.ret), `${st.days} trading days`], ['Nasdaq 100', pc(st.qqq), `council ${pc(st.ret - st.qqq)} vs it`], ['S&P 500', pc(st.spy), `council ${pc(st.ret - st.spy)} vs it`], ['Max drawdown', pc(st.maxDD), `Sharpe ${st.sharpe == null ? '—' : st.sharpe.toFixed(2)}`]]
-    .map(([a, b, c]) => `<div class="kpi"><div class="eyebrow">${a}</div><div class="num">${b}</div><small>${c}</small></div>`).join('') : '<div class="kpi" style="grid-column:1/-1"><div class="eyebrow">No record yet</div><small>It starts at the first open after the first decision.</small></div>';
-  $('#rc-ledger').innerHTML = P.verify?.ok ? `<span class="up">Ledger intact</span>, ${P.verify.n} entries.` : `<span class="down">Ledger broken at entry ${P.verify?.at}.</span>`;
+  const st = P.stats, ser = P.series, has = st && ser.length > 1;
+  $('#rc-value').innerHTML = has ? `<span class="${cls(st.ret)}">${pc(st.ret)}</span>` : '<span style="color:var(--tx3)">—</span>';
+  $('#rc-sub').innerHTML = has ? `over ${st.days} trading days · <b class="${cls(st.ret - st.qqq)}">${pc(st.ret - st.qqq)}</b> vs QQQ` : 'Starts at the first open after the first decision';
+  $('#rc-kpis').innerHTML = has ? kpi('Nasdaq 100', pc(st.qqq), 'QQQ, same days') + kpi('S&P 500', pc(st.spy), 'SPY, same days') + kpi('Max drawdown', pc(st.maxDD), 'worst fall from a peak') + kpi('Sharpe', st.sharpe == null ? '—' : st.sharpe.toFixed(2), 'annualised') : '';
+  $('#rc-ledger').innerHTML = P.verify?.ok ? `<span class="up">● Ledger intact</span>, ${P.verify.n} entries.` : `<span class="down">● Ledger broken at entry ${P.verify?.at}.</span>`;
   chart(ser, P.capital);
 }
 function chart(ser, cap) {
   const cv = $('#chart'), ctx = cv.getContext('2d'), dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
   cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
-  if (ser.length < 2) { ctx.fillStyle = '#6c728a'; ctx.font = '13px Inter'; ctx.textAlign = 'center'; ctx.fillText('Fills in after the first decision.', W / 2, H / 2); return; }
-  const L = 40, R = 6, T = 8, B = 18, v = ser.flatMap((p) => [p[1], p[2], p[3]]).filter((x) => x != null).map((x) => x / cap - 1);
-  let lo = Math.min(0, ...v), hi = Math.max(0, ...v); const pad = (hi - lo) * 0.1 || 0.01; lo -= pad; hi += pad;
+  if (ser.length < 2) { ctx.fillStyle = 'rgba(220,228,255,.4)'; ctx.font = '13px Inter'; ctx.textAlign = 'center'; ctx.fillText('The line starts after the first fill.', W / 2, H / 2); return; }
+  const L = 6, R = 40, T = 10, B = 20, v = ser.flatMap((p) => [p[1], p[2], p[3]]).filter((x) => x != null).map((x) => x / cap - 1);
+  let lo = Math.min(0, ...v), hi = Math.max(0, ...v); const pad = (hi - lo) * 0.12 || 0.01; lo -= pad; hi += pad;
   const X = (i) => L + (i / (ser.length - 1)) * (W - L - R), Y = (x) => T + (1 - (x - lo) / (hi - lo)) * (H - T - B);
-  ctx.font = '10px Inter'; ctx.fillStyle = '#6c728a'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-  for (let k = 0; k <= 3; k++) { const x = lo + ((hi - lo) * k) / 3; ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.beginPath(); ctx.moveTo(L, Y(x)); ctx.lineTo(W - R, Y(x)); ctx.stroke(); ctx.fillText(pc(x, 0), L - 5, Y(x)); }
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(ser[0][0].slice(5), L, H - B + 5); ctx.textAlign = 'right'; ctx.fillText(ser[ser.length - 1][0].slice(5), W - R, H - B + 5);
-  const line = (ix, col, w) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); let m = false; ser.forEach((p, i) => { if (p[ix] == null) return; const x = X(i), y = Y(p[ix] / cap - 1); m ? ctx.lineTo(x, y) : ctx.moveTo(x, y); m = true; }); ctx.stroke(); };
-  line(2, '#7f8bb0', 1.2); line(3, '#33c3ff', 1.2); line(1, '#ffd76a', 2);
+  ctx.font = '10.5px Inter'; ctx.fillStyle = 'rgba(220,228,255,.4)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  for (let k = 0; k <= 3; k++) { const x = lo + ((hi - lo) * k) / 3; ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(L, Y(x)); ctx.lineTo(W - R, Y(x)); ctx.stroke(); ctx.setLineDash([]); ctx.fillText(pc(x, 0), W - R + 6, Y(x)); }
+  ctx.textBaseline = 'top'; ctx.fillText(ser[0][0].slice(5), L, H - B + 6); ctx.textAlign = 'right'; ctx.fillText(ser[ser.length - 1][0].slice(5), W - R, H - B + 6);
+  const path = (ix) => { ctx.beginPath(); let m = false; ser.forEach((p, i) => { if (p[ix] == null) return; const x = X(i), y = Y(p[ix] / cap - 1); m ? ctx.lineTo(x, y) : ctx.moveTo(x, y); m = true; }); };
+  const line = (ix, col, w) => { path(ix); ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineJoin = 'round'; ctx.stroke(); };
+  line(2, 'rgba(141,151,189,.8)', 1.3); line(3, 'rgba(69,200,255,.85)', 1.3);
+  path(1); ctx.lineTo(X(ser.length - 1), H - B); ctx.lineTo(X(0), H - B); ctx.closePath();
+  const g = ctx.createLinearGradient(0, T, 0, H - B); g.addColorStop(0, 'rgba(255,215,106,.28)'); g.addColorStop(1, 'rgba(255,215,106,0)'); ctx.fillStyle = g; ctx.fill();
+  ctx.shadowColor = 'rgba(255,215,106,.7)'; ctx.shadowBlur = 10; line(1, '#ffd76a', 2.2); ctx.shadowBlur = 0;
+  const lx = X(ser.length - 1), ly = Y(ser[ser.length - 1][1] / cap - 1); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(lx, ly, 3.5, 0, 6.283); ctx.fill();
 }
 
 /* ── Sessions ────────────────────────────────────────────────────────── */
+const chevron = '<svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>';
 function renderSessions() {
   const list = OC.sessions(demo);
-  $('#ss-list').innerHTML = list.map((s) => `<div class="ss" data-id="${esc(s.id)}"><div class="ss-t"><b>${when(s.startedAt)}</b><span class="tag ${s.status}">${s.status === 'done' ? esc(S.presets[s.preset]?.label || s.preset) : esc(s.status)}</span>${s.demo ? '<span class="tag demo">demo</span>' : ''}</div><p>${s.status === 'done' ? `${s.holdings} holdings · confidence ${s.confidence} · ${money(s.cost)}${s.device ? ' · ' + esc(s.device) : ''}` : esc(s.error || '')}</p>${s.summary ? `<p>${esc(s.summary)}</p>` : ''}</div>`).join('') || '<p class="fine center">No sessions yet.</p>';
+  $('#ss-list').innerHTML = list.map((s) => { const d = new Date(s.startedAt);
+    return `<div class="ss" data-id="${esc(s.id)}"><div class="ss-ic">${d.getDate()}<small>${d.toLocaleString('en', { month: 'short' }).toUpperCase()}</small></div>
+      <div class="ss-body"><div class="ss-t"><b>${s.status === 'done' ? esc(S.presets[s.preset]?.label || s.preset) + ' session' : 'Session ' + esc(s.status)}</b>${s.demo ? '<span class="tag demo">demo</span>' : ''}${s.status !== 'done' ? `<span class="tag ${s.status}">${esc(s.status)}</span>` : ''}</div>
+      <p>${s.status === 'done' ? `${s.holdings} holdings · confidence ${s.confidence} · ${money(s.cost)}${s.device ? ' · ' + esc(s.device) : ''}` : esc(s.error || '')}</p></div>${chevron}</div>`; }).join('')
+    || `<div class="fine">No ${demo ? 'demo ' : ''}sessions yet.</div>`;
   $$('#ss-list .ss').forEach((el) => (el.onclick = () => detail(el.dataset.id)));
 }
 function detail(id) {
   show('session');
   const s = OC.session(id);
   if (!s) return ($('#ss-detail').innerHTML = '<p class="fine">Could not load it.</p>');
-  const blk = (k, d, extra = '') => { const m = SEAT[k] || { name: k, role: '', color: '#999' }; return `<div class="tr" style="--c:${m.color}"><div class="m"><b style="color:${m.color}">${esc(m.name)}</b> · ${esc(m.role)}</div><p>${esc(d.statement || '')}</p>${extra}${d.picks ? `<div class="chips">${d.picks.slice().sort((a, b) => b.weight - a.weight).map((p) => `<span class="chip"><b>${esc(p.ticker)}</b> ${fw(p.weight)}</span>`).join('')}</div>` : ''}</div>`; };
-  let h = `<div class="head"><div class="eyebrow">${esc(S.presets[s.preset]?.label || s.preset)}${s.demo ? ' · demo' : ''} · ${money(s.cost)}</div><h2 style="font-size:22px">${when(s.startedAt)}</h2></div>`;
-  if (s.error) h += `<p class="down">${esc(s.error)}</p>`;
+  const blk = (k, d, extra = '') => { const m = SEAT[k] || { name: k, role: '', color: '#999' }; return `<div class="glass tr" style="--c:${m.color}"><div class="m"><b style="color:${m.color}">${esc(m.name)}</b> · ${esc(m.role)}</div><p>${esc(d.statement || '')}</p>${extra}${d.picks ? `<div class="chips">${d.picks.slice().sort((a, b) => b.weight - a.weight).map((p) => chip(p.ticker, p.weight)).join('')}</div>` : ''}</div>`; };
+  let h = `<div class="hero" style="padding-top:0"><div class="eyebrow">${esc(S.presets[s.preset]?.label || s.preset)}${s.demo ? ' · demo' : ''} · ${money(s.cost)}${s.device ? ' · ' + esc(s.device) : ''}</div><h1 style="font-size:30px">${when(s.startedAt)}</h1></div>`;
+  if (s.error) h += `<div class="note" style="border-color:rgba(255,112,136,.4);background:rgba(255,112,136,.1);color:#ffc6cf">${esc(s.error)}</div>`;
   if (s.final) h += '<div class="tr-r">Decision</div>' + blk('arbiter', s.final, `<p style="color:var(--tx)">${esc(s.final.summary)}</p><ul>${s.final.holdings.map((x) => `<li><b>${esc(x.ticker)} ${fw(x.weight)}</b>: ${esc(x.thesis)}</li>`).join('')}</ul>`);
   if (s.risk) h += '<div class="tr-r">Risk review</div>' + blk('sentinel', s.risk);
   if (s.redteam) h += '<div class="tr-r">Red team</div>' + blk('vex', s.redteam, `<ul>${s.redteam.attacks.map((a) => `<li><b>${esc(a.target)}</b>: ${esc(a.argument)}</li>`).join('')}</ul>`);
@@ -280,7 +334,7 @@ function renderSettings() {
   if (document.activeElement !== $('#y-dev')) $('#y-dev').value = st.device || '';
   $('#y-tok').placeholder = S.hasToken ? 'Saved. Paste to replace' : 'github_pat_...';
   $('#y-state').innerHTML = !y.on ? '<span class="pill">Off</span>' : y.error ? '<span class="pill bad">Error</span>' : '<span class="pill ok">Connected</span>';
-  $('#y-info').innerHTML = !y.on ? 'Not set up. With the same repository and token on the PC and here, both apps are one council.' : y.error ? `<span class="down">${esc(y.error)}</span>` : `Last synced ${y.last ? when(y.last) : 'never'} as ${esc(y.device)}.`;
+  $('#y-info').innerHTML = !y.on ? 'Not connected.' : y.error ? `<span class="down">${esc(y.error)}</span>` : `Last synced ${y.last ? when(y.last) : 'never'} as ${esc(y.device)}.`;
   $('#d-preset').innerHTML = ['low', 'normal', 'high'].map((k) => `<button data-k="${k}" class="${st.preset === k ? 'on' : ''}">${S.presets[k].label}<small>~${money(S.presets[k].est.mid)}</small></button>`).join('');
   $$('#d-preset button').forEach((b) => (b.onclick = () => saveS({ preset: b.dataset.k })));
   if (document.activeElement !== $('#d-sec')) $('#d-sec').value = st.secContact || '';
@@ -307,6 +361,32 @@ async function syncNowUI() {
   const r = await OC.syncNow(); refresh(); renderSettings();
   toast(r.off ? 'Fill in the repository and token first.' : r.error ? 'Sync failed: ' + r.error : 'Synced', !!r.error);
 }
+
+/* ── Ambient waves: slow flowing lines of light behind everything, in the current screen's colour ── */
+(() => {
+  const cv = $('#waves'), ctx = cv.getContext('2d'); let W, H, last = 0;
+  const size = () => { const d = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; cv.width = W * d; cv.height = H * d; ctx.setTransform(d, 0, 0, d, 0, 0); };
+  addEventListener('resize', size); size();
+  const accent = () => getComputedStyle(document.body).getPropertyValue('--accent').trim() || '104,140,255';
+  function frame(t) {
+    requestAnimationFrame(frame);
+    if (document.hidden || t - last < 33) return; last = t;   // about 30 frames a second is plenty for ambience
+    ctx.clearRect(0, 0, W, H); const c = accent(), s = t / 9000;
+    for (let k = 0; k < 7; k++) {
+      ctx.beginPath();
+      for (let x = -10; x <= W + 10; x += 12) {
+        const y = H * 0.62 + Math.sin(x / W * 3.2 + s * 2 + k * 0.35) * H * 0.07 + Math.sin(x / W * 7 - s * 3 + k) * H * 0.018 + (k - 3) * 9;
+        x < 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = `rgba(${c},${0.05 + 0.025 * (3 - Math.abs(k - 3))})`; ctx.lineWidth = 1.1; ctx.stroke();
+    }
+    for (let i = 0; i < 26; i++) {   // drifting motes
+      const x = ((i * 137.5 + s * 600 * (0.4 + (i % 5) / 6)) % (W + 40)) - 20, y = H * 0.55 + Math.sin(i * 1.7 + s * 4) * H * 0.12 + ((i * 53) % 90) - 45;
+      ctx.fillStyle = `rgba(255,255,255,${0.12 + 0.18 * ((Math.sin(s * 6 + i) + 1) / 2)})`; ctx.beginPath(); ctx.arc(x, y, (i % 3) * 0.5 + 0.6, 0, 6.283); ctx.fill();
+    }
+  }
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) requestAnimationFrame(frame);
+})();
 
 /* Android back button: step back inside the app, or tell the shell to leave. */
 window.ocBack = () => {
