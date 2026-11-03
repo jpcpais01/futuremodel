@@ -1,12 +1,10 @@
-__pycache__/
-*.pyc
-.pytest_cache/
-*.egg-info/
-build/
+node_modules/
 dist/
-.venv/
-# local data store, trained models and live logs (rebuild with `fm update` / `fm train`)
-data/
-models/
-signals/
-reports/_synthetic/
+# Oazy Research ships a copy of council/engine, made by `npm run sync-engine`
+research/engine/
+research/tools/.check.js
+# council's local data (when run from the command line)
+council/data/
+# Core's live book and the page built from it carry the tracked wallet address: they stay on the PC
+research/tools/plan.js
+research/app/index.html

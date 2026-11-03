@@ -1,0 +1,2 @@
+Company logos used only to identify each ticker in the app. They are trademarks of their owners.
+Sources: github.com/nvstly/icons and financialmodelingprep.com, resized to 96x96 tiles.

@@ -1,0 +1,71 @@
+{
+  "name": "oazy-research",
+  "productName": "Oazy Research",
+  "version": "1.1.0",
+  "description": "Oazy Research: the Core portfolio and the AI council portfolio",
+  "author": "Oazy",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "sync-engine": "node tools/sync_engine.js",
+    "build": "node tools/build_app.js",
+    "prestart": "npm run sync-engine && npm run build",
+    "start": "electron .",
+    "predist": "npm run sync-engine && npm run build",
+    "dist": "electron-builder --win nsis portable"
+  },
+  "build": {
+    "appId": "com.oazy.research",
+    "productName": "Oazy Research",
+    "artifactName": "OazyResearch-${version}.exe",
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**/*",
+      "engine/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "portable": {
+      "useZip": false,
+      "artifactName": "OazyResearch-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "OazyResearchSetup.exe",
+      "shortcutName": "Oazy Research",
+      "createStartMenuShortcut": true,
+      "createDesktopShortcut": false,
+      "runAfterFinish": false,
+      "deleteAppDataOnUninstall": false
+    },
+    "extraFiles": [
+      {
+        "from": "art",
+        "to": ".",
+        "filter": [
+          "*.png"
+        ]
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
+    "puppeteer-core": "^25.16.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0"
+  }
+}

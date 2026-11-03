@@ -1,0 +1,24 @@
+{
+  "name": "oazy-council",
+  "productName": "Oazy Council",
+  "version": "1.2.0",
+  "description": "The council engine and the Android app. The desktop app is Oazy Research (../research).",
+  "author": "Oazy",
+  "private": true,
+  "scripts": {
+    "session": "node engine/cli.js session",
+    "demo": "node engine/cli.js session --demo",
+    "watch": "node engine/cli.js watch",
+    "status": "node engine/cli.js status",
+    "estimate": "node engine/cli.js estimate",
+    "test": "node test/run.js",
+    "apk": "bash android/build.sh",
+    "bundle": "node phone/build.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10"
+  }
+}
