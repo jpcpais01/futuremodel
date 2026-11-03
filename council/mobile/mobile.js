@@ -309,14 +309,14 @@ function renderPortfolio() {
   $('#pf-asof').textContent = f ? `${demo ? 'Demo · ' : ''}Paper value · decided ${when(P.decidedAt)}` : demo ? 'Demo record' : 'Paper value';
   const [whole, cents] = money(nav, 2).split('.');
   $('#pf-value').innerHTML = `${whole}<small>.${cents}</small>`;
-  $('#pf-change').innerHTML = st ? `<b class="${cls(st.ret)}">${pc(st.ret)}</b> since the first decision` : 'Starting capital, fills at the next open after a decision';
+  $('#pf-change').innerHTML = st ? `<b class="${cls(st.ret)}">${pc(st.ret)}</b> since the first decision` : 'Starting capital, entered at the open of the decision day';
   ['#pf-sumcard', '#pf-watch', '#pf-watchwrap'].forEach((x) => $(x).classList.toggle('hidden', !f));
   if (!f) { $('#pf-kpis').innerHTML = ''; $('#pf-list').innerHTML = '<div class="fine">No decision yet. Convene the council to build the first portfolio.</div>'; $('#pf-count').textContent = ''; $('#pf-note').classList.add('hidden'); return; }
   $('#pf-kpis').innerHTML = kpi('vs Nasdaq 100', st?.qqq != null ? `<span class="${cls(st.ret - st.qqq)}">${pc(st.ret - st.qqq)}</span>` : '—', st?.qqq != null ? `QQQ ${pc(st.qqq)}` : 'once filled')
     + kpi('vs S&P 500', st?.spy != null ? `<span class="${cls(st.ret - st.spy)}">${pc(st.ret - st.spy)}</span>` : '—', st?.spy != null ? `SPY ${pc(st.spy)}` : 'once filled')
     + kpi('Confidence', `${f.confidence ?? '—'}<small style="display:inline;font-size:13px">/100</small>`, 'from the chair')
     + kpi('Cash', fw(f.cash_pct), `${f.holdings.length} holdings`);
-  $('#pf-note').classList.toggle('hidden', !P.pending?.length); $('#pf-note').textContent = 'The latest decision fills at the next market open (9:30 ET).';
+  $('#pf-note').classList.toggle('hidden', !P.pending?.length); $('#pf-note').textContent = 'The latest decision enters at its trading day\'s open (9:30 ET) as soon as those prices load.';
   $('#pf-sum').textContent = f.summary;
   $('#pf-count').textContent = `${f.holdings.length} names`;
   const pos = Object.fromEntries((P.positions || []).map((p) => [p.t, p])), max = Math.max(...f.holdings.map((h) => h.weight));
@@ -339,7 +339,7 @@ function renderRecord() {
   P = OC.portfolio(demo); P.verify = OC.verify(demo);
   const st = P.stats, ser = P.series, has = st && ser.length > 1;
   $('#rc-value').innerHTML = has ? `<span class="${cls(st.ret)}">${pc(st.ret)}</span>` : '<span style="color:var(--tx3)">—</span>';
-  $('#rc-sub').innerHTML = has ? `over ${st.days} trading days · <b class="${cls(st.ret - st.qqq)}">${pc(st.ret - st.qqq)}</b> vs QQQ` : 'Starts at the first open after the first decision';
+  $('#rc-sub').innerHTML = has ? `over ${st.days} trading days · <b class="${cls(st.ret - st.qqq)}">${pc(st.ret - st.qqq)}</b> vs QQQ` : 'Starts at the open of the first decision day';
   $('#rc-kpis').innerHTML = has ? kpi('Nasdaq 100', pc(st.qqq), 'QQQ, same days') + kpi('S&P 500', pc(st.spy), 'SPY, same days') + kpi('Max drawdown', pc(st.maxDD), 'worst fall from a peak') + kpi('Sharpe', st.sharpe == null ? '—' : st.sharpe.toFixed(2), 'annualised') : '';
   $('#rc-ledger').innerHTML = P.verify?.ok ? `<span class="up">● Ledger intact</span>, ${P.verify.n} entries.` : `<span class="down">● Ledger broken at entry ${P.verify?.at}.</span>`;
   chart(ser, P.capital);
@@ -353,7 +353,7 @@ function chart(ser, cap) {
   const X = (i) => L + (i / (ser.length - 1)) * (W - L - R), Y = (x) => T + (1 - (x - lo) / (hi - lo)) * (H - T - B);
   ctx.font = '10.5px Inter'; ctx.fillStyle = 'rgba(220,228,255,.4)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   for (let k = 0; k <= 3; k++) { const x = lo + ((hi - lo) * k) / 3; ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(L, Y(x)); ctx.lineTo(W - R, Y(x)); ctx.stroke(); ctx.setLineDash([]); ctx.fillText(pc(x, 0), W - R + 6, Y(x)); }
-  ctx.textBaseline = 'top'; ctx.fillText(ser[0][0].slice(5), L, H - B + 6); ctx.textAlign = 'right'; ctx.fillText(ser[ser.length - 1][0].slice(5), W - R, H - B + 6);
+  ctx.textBaseline = 'top'; ctx.fillText(ser[0][0].slice(5, 10), L, H - B + 6); ctx.textAlign = 'right'; ctx.fillText(ser[ser.length - 1][0].slice(5, 10), W - R, H - B + 6);
   const path = (ix) => { ctx.beginPath(); let m = false; ser.forEach((p, i) => { if (p[ix] == null) return; const x = X(i), y = Y(p[ix] / cap - 1); m ? ctx.lineTo(x, y) : ctx.moveTo(x, y); m = true; }); };
   const line = (ix, col, w) => { path(ix); ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineJoin = 'round'; ctx.stroke(); };
   line(2, 'rgba(141,151,189,.8)', 1.3); line(3, 'rgba(69,200,255,.85)', 1.3);

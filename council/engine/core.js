@@ -192,7 +192,10 @@ function createCore({ platform = 'pc', version = '1.0.0', deviceName = 'device',
     try {
       const want = new Set(['SPY', 'QQQ']);
       for (const f of ['ledger.jsonl', 'demo-ledger.jsonl']) ledger.events(f).filter((e) => e.type === 'decision').forEach((e) => Object.keys(e.target).forEach((t) => want.add(t)));
-      for (const t of want) await prices.history(t).catch(() => null);
+      // Once New York has opened, the record needs today's bar so a decision can enter at today's open.
+      const { date, min } = ledger.etParts(Date.now()), wd = new Date(date + 'T12:00:00Z').getUTCDay();
+      const need = wd > 0 && wd < 6 && min >= 570 ? date : null;
+      for (const t of want) await prices.history(t, { need }).catch(() => null);
       onChanged('marks');
     } finally { refreshing = false; }
   }

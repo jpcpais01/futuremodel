@@ -11,7 +11,7 @@ const pc = (f, d = 2) => num(f) ? fpct(f * 100, d) : '—';               // a f
 const fw = (w) => (w == null ? '—' : (+w).toFixed(1) + '%');           // a weight already in percent
 const cls = (v) => !num(v) ? 'mu' : v >= 0 ? 'up' : 'dn';
 const money = (v) => fusd(v, 2);
-const dayT = (d) => Date.parse(String(d).slice(0, 10) + 'T21:00:00Z');
+const dayT = (d) => (String(d).length > 10 ? Date.parse(d) : Date.parse(String(d).slice(0, 10) + 'T21:00:00Z'));   // a bare date is that day's close; the record's first point is the 09:30 open
 const when = (ts) => new Date(ts).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
 const shortDate = (ts) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -193,7 +193,7 @@ async function drawHero() {
   const c = $('#heroC'); if (page !== 'home') return; const cap = $('#heroCap');
   if (sel === 'COUNCIL') {
     c.style.opacity = 1; const s = perfSeries();
-    chart(c, s || [], { ref: 0, refL: 'Start', fy: (v) => fpct(v, 2), key: 'COUNCIL|' + demo + '|' + (P?.series?.length || 0), capFn: (b, empty) => { if (empty) { setCap(cap, '', P?.final ? (P.pending?.length ? 'The first fills land at the next market open' : 'The line starts after the first fill') : 'The line starts after the first decision'); return; } const p = s[0].p, v = b ? b[1] : p[p.length - 1][1]; setCap(cap, fpct(v, 2), b ? new Date(b[0]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Since the first fill, after trading costs', cls(v)); } });
+    chart(c, s || [], { ref: 0, refL: 'Start', fy: (v) => fpct(v, 2), key: 'COUNCIL|' + demo + '|' + (P?.series?.length || 0), capFn: (b, empty) => { if (empty) { setCap(cap, '', P?.final ? (P.pending?.length ? 'Enters at today\'s open as soon as today\'s prices load' : 'The line starts at the first decision day\'s open') : 'The line starts after the first decision'); return; } const p = s[0].p, v = b ? b[1] : p[p.length - 1][1]; setCap(cap, fpct(v, 2), b ? new Date(b[0]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Since entering at the open, after trading costs', cls(v)); } });
     return;
   }
   const t = sel, all = await hist(t); if (t !== sel || page !== 'home') return;
@@ -230,7 +230,7 @@ $('#grid').onclick = (e) => { const c = e.target.closest('.card[data-t]'); if (c
 /* ── Performance ─────────────────────────────────────────────────────────── */
 function drawPerf() {
   const c = $('#perfC'); if (page !== 'perf') return; const s = perfSeries(), cap = $('#perfCap');
-  chart(c, s || [], { ref: 0, refL: 'Start', fy: (v) => fpct(v, 2), key: 'PERF|' + demo + '|' + (P?.series?.length || 0), pt: 40, pb: 34, capFn: (b, empty) => { if (empty) { setCap(cap, '', 'The record starts at the first fill, the market open after the first decision'); return; } if (!b) { setCap(cap, '', 'Paper fills at the next open, 10 bps per trade, against SPY and QQQ from the same day'); return; } setCap(cap, fpct(b[1], 2), new Date(b[0]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), cls(b[1])); } });
+  chart(c, s || [], { ref: 0, refL: 'Start', fy: (v) => fpct(v, 2), key: 'PERF|' + demo + '|' + (P?.series?.length || 0), pt: 40, pb: 34, capFn: (b, empty) => { if (empty) { setCap(cap, '', 'The record starts at the open of the first decision\'s trading day'); return; } if (!b) { setCap(cap, '', 'A paper index entered at each decision day\'s open, 10 bps per trade, against SPY and QQQ from the same open'); return; } setCap(cap, fpct(b[1], 2), new Date(b[0]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), cls(b[1])); } });
 }
 async function renderPerf() {
   const st = P?.stats, nav = navNow(), set = (id, v, txt) => { const e = $(id); e.textContent = txt; e.className = cls(v); };
@@ -663,9 +663,9 @@ const xBtn = () => `<button class="icon" data-close aria-label="Close">${svg(IC.
 function details(t) {
   const h = holdings().find((x) => x.ticker === t), u = UNI[t] || {}, p = posOf(t); if (!h && !p) return;
   const backers = (h?.champions || []).map((n) => seatByName(n)).filter(Boolean);
-  const nums = [['Target weight', fw(h?.weight)], ['Actual weight', p ? fw(p.weight) : 'pending'], ['Value', p ? fusd(p.value) : '—'], ['P&L', p ? fsgn(p.pnl) : '—'], ['Since entry', p?.pnlPct != null ? pc(p.pnlPct) : '—'], ['Last close', p?.px ? fpx(p.px) : '—'], ['Held since', p?.since ? new Date(String(p.since).slice(0, 10)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'next open'], ['Sector', u.s || '—']];
+  const nums = [['Target weight', fw(h?.weight)], ['Actual weight', p ? fw(p.weight) : 'pending'], ['Value', p ? fusd(p.value) : '—'], ['P&L', p ? fsgn(p.pnl) : '—'], ['Since entry', p?.pnlPct != null ? pc(p.pnlPct) : '—'], ['Last close', p?.px ? fpx(p.px) : '—'], ['Held since', p?.since ? new Date(String(p.since).slice(0, 10)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'at the open'], ['Sector', u.s || '—']];
   openSheet(`<div class="shead">${mark(t, 56)}<div><h3>${esc(u.n || t)}</h3><small>${esc(t)} · ${u.k === 'E' ? 'Fund' : 'Stock'} · ${esc(u.s || '')}</small></div>${xBtn()}</div>
-    <div class="sgrid"><div>${h ? `<div class="sec"><h4>Why the council holds it · ${stars(h.conviction)}</h4><p>${esc(h.thesis)}</p></div><div class="sec"><h4>Sell if</h4><div class="warnbox">${esc(h.rotate_if)}</div></div>` : '<div class="sec"><h4>Leaving</h4><p>The latest decision sells this at the next open.</p></div>'}
+    <div class="sgrid"><div>${h ? `<div class="sec"><h4>Why the council holds it · ${stars(h.conviction)}</h4><p>${esc(h.thesis)}</p></div><div class="sec"><h4>Sell if</h4><div class="warnbox">${esc(h.rotate_if)}</div></div>` : '<div class="sec"><h4>Leaving</h4><p>The latest decision sells this at the open of its trading day.</p></div>'}
     ${backers.length ? `<div class="sec" style="margin-bottom:0"><h4>Argued for by</h4><div class="backers">${backers.map((k) => `<span class="backer">${orb(k, 24)}${esc(SEAT[k].name)}</span>`).join('')}</div></div>` : ''}</div>
     <div class="nums">${nums.map((n) => `<div><span>${n[0]}</span><b>${esc(n[1])}</b></div>`).join('')}</div></div>`);
 }
@@ -696,7 +696,7 @@ async function openSettings() {
       <div class="trow"><span>Keep running in the tray so the schedule runs</span>${tog('tTray', st.tray)}</div>
       <div class="fl2" style="margin-top:8px"><label for="dSec">Contact for SEC filings (they ask for one; stays on this PC)</label><input class="field" id="dSec" value="${esc(st.secContact || '')}" placeholder="Your name and email" spellcheck="false"></div>
       <div class="row"><button class="btn gh" id="dData">Open the data folder</button></div></div>
-    <div class="sbox"><h4>How it is judged</h4><p>Every decision is written to a hash-chained ledger before it fills, at the next market open, with 10 bps per trade. The record is compared with SPY and QQQ from the same day. No backtests, only what happens next.</p></div>
+    <div class="sbox"><h4>How it is judged</h4><p>Every decision is written to a hash-chained ledger, and the paper index enters it at the open of that New York trading day (the next open on weekends), with 10 bps per trade. It is compared with SPY and QQQ bought at the same open. No backtests, only what happens next.</p></div>
   </div>`, true);
   const save = async (patch, msg = 'Saved') => { const r = await OC.setSettings(patch); if (r?.error) return toast(r.error, true); S = r; if (patch.preset) preset = patch.preset; toast(msg); renderIdle(); };
   $('#kSave').onclick = async () => { const v = $('#kIn').value.trim(); if (!v) return toast('Paste the key first.', true); if (!/^sk-ant-/.test(v)) return toast('That does not look like an Anthropic API key (sk-ant-…).', true); const r = await OC.setSecret('anthropicKey', v); $('#kIn').value = ''; if (r?.error) return toast(r.error, true); toast('Key saved, encrypted on this PC.'); await refresh(); openSettings(); };
@@ -724,7 +724,7 @@ function closePop() { $('#pop').classList.remove('on'); }
 function renderBell() {
   const wl = (P?.watch || []).slice(0, 8), pend = P?.pending?.length, flagged = wl.filter((w) => w.convene && Date.now() - Date.parse(w.at) < 3 * 864e5).length;
   const cnt = $('#count'); cnt.hidden = !(flagged || pend); cnt.textContent = flagged + (pend ? 1 : 0);
-  $('#pop').innerHTML = (pend ? `<div class="sg warn"><i></i><div><b>A decision waits for the open</b><span>It fills at the next market open, 9:30 New York time.</span></div></div>` : '')
+  $('#pop').innerHTML = (pend ? `<div class="sg warn"><i></i><div><b>A decision waits for its open price</b><span>It enters at the 9:30 New York open of its trading day as soon as those prices load.</span></div></div>` : '')
     + (wl.length ? '<h5 style="font-size:10.5px;font-weight:700;letter-spacing:.18em;color:rgba(255,255,255,.45);padding:8px 12px 2px">THE WATCH</h5>' + wl.map((w) => `<div class="wl ${w.convene ? 'bad' : ''}"><small>${when(w.at)}${w.convene ? ' · called for a session' : ''}</small>${esc(w.statement)}</div>`).join('') : `<div class="sg ok"><i></i><div><b>Nothing flagged</b><span>${P?.final ? 'The watch has not run yet.' : 'The watch starts after the first decision.'}</span></div></div>`)
     + (P?.final && (demo || S?.hasKey) ? '<div class="row"><button class="btn gh" id="watchNow">Run the watch now</button></div>' : '');
   const b = $('#watchNow'); if (b) b.onclick = async (e) => { e.stopPropagation(); b.disabled = true; b.textContent = 'Watching…'; const r = await OC.watch(demo); if (r?.error) toast(r.error, true); else toast(r?.statement || 'Watch complete'); await refresh(); $('#pop').classList.add('on'); };

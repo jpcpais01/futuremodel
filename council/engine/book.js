@@ -46,13 +46,13 @@ function portfolioSection(state) {
   const L = ['## Current portfolio (paper record)'];
   if (!state || (!state.positions.length && !state.pending.length)) { L.push('The council holds nothing yet; this session builds the first portfolio. Capital: $' + LIMITS.startCapital.toLocaleString('en-US') + '.'); return L.join('\n'); }
   const st = state.stats;
-  if (st) L.push(`Since inception (${state.series[0]?.d}): ${M.pc(st.ret)} vs S&P 500 ${M.pc(st.spy)} and Nasdaq-100 ${M.pc(st.qqq)}; max drawdown ${M.pc(st.maxDD)}.`);
+  if (st) L.push(`Since inception (${state.series[0]?.d?.slice(0, 10)}): ${M.pc(st.ret)} vs S&P 500 ${M.pc(st.spy)} and Nasdaq-100 ${M.pc(st.qqq)}; max drawdown ${M.pc(st.maxDD)}.`);
   state.positions.forEach((p) => {
     const last = state.lastHoldings?.[p.t];
     L.push(`- ${p.t} ${num(p.weight, 1)}% of the portfolio, held since ${p.since}, P&L ${M.pc(p.pnlPct)}${last ? `. Thesis: ${last.thesis} Rotate if: ${last.rotate_if}` : ''}`);
   });
   L.push(`- Cash ${num(state.cash, 1)}%.`);
-  if (state.pending.length) L.push(`A decision from ${state.pending[state.pending.length - 1].at} is waiting to fill at the next open.`);
+  if (state.pending.length) L.push(`A decision from ${state.pending[state.pending.length - 1].at} enters at the open of its trading day once that day's prices are in.`);
   if (state.lastSummary) L.push(`Last session's thesis: ${state.lastSummary}`);
   return L.join('\n');
 }

@@ -42,7 +42,7 @@ A weekly Normal session plus the daily watch costs roughly $10 to $12 a month.
 There is deliberately **no backtest**. A language model already knows what happened in the past, so a backtest of the council would be contaminated by hindsight and would prove nothing. The only evidence that counts is the **forward paper record**:
 
 - Each decision is appended to `ledger.jsonl` with its timestamp, its target weights and a hash of the exact market book the council read. Every entry is chained to the previous one with SHA-256, so any later edit is detectable (Performance, then "Verify again").
-- A decision fills at the **first regular-session open after it was made** (09:30 New York time), with a 0.1% cost on everything traded.
+- The record is an index, not a broker account: a decision **enters at the open of its own New York trading day** (09:30), or the next open on a weekend or holiday, with a 0.1% cost on everything traded. A decision made during or after the session gets up to one day of hindsight; that is the price of an index that starts on the day it is decided.
 - Values use total-return (dividend-adjusted) prices, the same as the SPY and QQQ benchmarks.
 
 A few weeks of results is noise. Judge it after several months, and preferably against QQQ, which is the hardest benchmark here.

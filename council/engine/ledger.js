@@ -1,7 +1,9 @@
 // The paper portfolio. Decisions are written to an append-only, hash-chained log the moment the chair decides.
 // Fills and every mark after them are recomputed from market data, so nothing can be adjusted after the fact.
 //
-// Fill rule (honest by construction): a decision fills at the first regular-session open after it was made.
+// Fill rule: the portfolio is an index, not a broker account. A decision enters at the regular-session open of the
+// New York trading day it was made on (09:30), or at the next open when it was made on a weekend or holiday.
+// A decision made after 09:30 therefore sees up to one session of hindsight; the record says so.
 // Values are tracked on dividend- and split-adjusted prices, so the record is a total return.
 'use strict';
 const crypto = require('crypto');
@@ -9,6 +11,7 @@ const store = require('./store');
 const { LIMITS } = require('./config');
 
 const FILE = 'ledger.jsonl';
+const RULE = 'Each decision enters at the open of its New York trading day (the next open on weekends and holidays). Adjusted prices, total return.';
 const hashOf = (o) => crypto.createHash('sha256').update(JSON.stringify(o)).digest('hex');
 
 function events(file = FILE) { return store.readLines(file); }
@@ -29,7 +32,7 @@ function verify(file = FILE) {
 }
 
 function ensureGenesis(capital = LIMITS.startCapital, file = FILE) {
-  if (!events(file).length) append({ type: 'genesis', capital, costBps: LIMITS.costBps, rule: 'Fills at the first regular-session open after each decision. Adjusted prices, total return.' }, file);
+  if (!events(file).length) append({ type: 'genesis', capital, costBps: LIMITS.costBps, rule: RULE }, file);
 }
 
 function recordDecision(s, file = FILE) {
@@ -47,9 +50,16 @@ function etParts(ts) {
   const p = Object.fromEntries(f.formatToParts(new Date(ts)).map((x) => [x.type, x.value]));
   return { date: `${p.year}-${p.month}-${p.day}`, min: (+p.hour % 24) * 60 + +p.minute };
 }
+/* 09:30 New York on a date, as an ISO time (handles daylight saving). */
+function openIso(d) {
+  for (const h of [13, 14]) { const t = Date.parse(`${d}T${h}:30:00Z`); if (etParts(t).min === 570) return new Date(t).toISOString(); }
+  return `${d}T14:30:00.000Z`;
+}
+/* The trading day whose open a decision enters at: its own New York date, or the next session after a weekend or holiday.
+   Null until that day's bar exists (before the open, or before prices refresh). */
 function fillDate(ts, days) {
-  const { date, min } = etParts(ts);
-  return days.find((d) => (d === date ? min < 570 : d > date)) || null;   // 570 = 09:30
+  const { date } = etParts(ts);
+  return days.find((d) => d >= date) || null;
 }
 
 /**
@@ -94,7 +104,11 @@ function replay(hist, file = FILE) {
       units = newUnits;
       cash = nav - fee - Object.entries(units).reduce((a, [t, u]) => a + u * adjOpen(get(t).get(d) || lastBar(t, d)), 0);
       fills.push({ date: d, session: e.session, decided: e.at, nav, fee, trades, hash: e.hash });
-      if (!bench) { const s = get('SPY').get(d), q = qqq && get('QQQ').get(d); bench = { spy: s ? adjOpen(s) : null, qqq: q ? adjOpen(q) : null, d }; }
+      if (!bench) {
+        const s = get('SPY').get(d), q = qqq && get('QQQ').get(d); bench = { spy: s ? adjOpen(s) : null, qqq: q ? adjOpen(q) : null, d };
+        // The index starts at the open, so day one's move (open to close) is part of the record.
+        series.push({ d: openIso(d), nav: cash + pos(d, adjOpen), spy: bench.spy ? gen.capital : null, qqq: bench.qqq ? gen.capital : null, open: true });
+      }
     }
     if (!bench) continue;
     const nav = cash + pos(d, (b) => b.ac), s = get('SPY').get(d), q = qqq ? get('QQQ').get(d) : null;
@@ -120,7 +134,7 @@ function stats(series, capital) {
   let wins = 0, n = 0;
   for (let i = 5; i < series.length; i += 5) { const a = series[i], b = series[i - 5]; if (a.spy && b.spy) { n++; if (a.nav / b.nav > a.spy / b.spy) wins++; } }
   return {
-    days: series.length, ret: last.nav / capital - 1, spy: last.spy ? last.spy / capital - 1 : null, qqq: last.qqq ? last.qqq / capital - 1 : null,
+    days: new Set(series.map((p) => p.d.slice(0, 10))).size, ret: last.nav / capital - 1, spy: last.spy ? last.spy / capital - 1 : null, qqq: last.qqq ? last.qqq / capital - 1 : null,
     vol: sd * Math.sqrt(252), sharpe: sd ? (mean / sd) * Math.sqrt(252) : null, maxDD: dd, weeklyHit: n ? wins / n : null, weeks: n,
   };
 }
@@ -137,4 +151,4 @@ function chainOnto(base, extras) {
   return out;
 }
 
-module.exports = { events, append, verify, ensureGenesis, recordDecision, replay, fillDate, etParts, chainOnto, hashOf };
+module.exports = { RULE, openIso, events, append, verify, ensureGenesis, recordDecision, replay, fillDate, etParts, chainOnto, hashOf };
