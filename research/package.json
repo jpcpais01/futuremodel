@@ -17,7 +17,7 @@
   "build": {
     "appId": "com.oazy.research",
     "productName": "Oazy Research",
-    "artifactName": "OazyResearch-${version}.exe",
+    "artifactName": "OazyResearch.exe",
     "files": [
       "main.js",
       "preload.js",
@@ -38,7 +38,7 @@
     },
     "portable": {
       "useZip": false,
-      "artifactName": "OazyResearch-${version}.exe"
+      "artifactName": "OazyResearch.exe"
     },
     "nsis": {
       "oneClick": true,

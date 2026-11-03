@@ -14,7 +14,7 @@ You need Node.js 20 or newer, and `../council` next to this folder (the engine i
 ```powershell
 npm install
 npm start                 # copies ../council/engine, builds the pages, opens the app
-npm run dist              # dist\OazyResearch-<version>.exe (portable) and an installer
+npm run dist              # dist\OazyResearch.exe (portable) and dist\OazyResearchSetup.exe (installs and updates the Start menu app)
 ```
 
 `F11` toggles full screen. `Tab` moves between pages, `1` to `5` jump to one.
