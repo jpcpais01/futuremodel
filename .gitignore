@@ -6,7 +6,7 @@ build/
 dist/
 .venv/
 # local data store, trained models and live logs (rebuild with `fm update` / `fm train`)
-data/
-models/
-signals/
+/data/
+/models/
+/signals/
 reports/_synthetic/
