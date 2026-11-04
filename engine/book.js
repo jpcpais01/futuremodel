@@ -56,8 +56,9 @@ function portfolioSection(state) {
   return L.join('\n');
 }
 
-function marketBook({ asOf, macro, scout, portfolio, metrics, reports, news, filings }) {
+function marketBook({ asOf, macro, calendar, scout, portfolio, metrics, reports, news, filings }) {
   const L = [`# Market book, ${new Date(asOf).toISOString().slice(0, 16).replace('T', ' ')} UTC`, '', macro, ''];
+  if (calendar) L.push(calendar, '');
   if (scout) L.push('## Scout briefing (live web research)', scout, '');
   L.push(portfolio, '', '## The universe', `${UNIVERSE.length} names, grouped by sector. Each has measured numbers, the analyst's dossier, the two newest headlines and recent filings.`, '');
   const sectors = [...new Set(UNIVERSE.map((u) => u[2]))];

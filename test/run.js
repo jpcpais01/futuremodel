@@ -137,13 +137,19 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name)
       return new Response(JSON.stringify({ chart: { result: [{ meta: { regularMarketPrice: close.at(-1) }, timestamp: days.map((d) => d / 1000), indicators: { quote: [{ open: close, high: close, low: close, close, volume: close.map(() => 1e6) }], adjclose: [{ adjclose: close }] } }] } }), { status: 200 });
     });
     process.env.OAZY_BUDGET_SCALE = '0.002'; llm.setMock(true, 400);
-    const seen = new Set(), pairs = [];
+    const seen = new Set(), pairs = [], hunts = [], reveals = [];
     try {
-      const s = await session.run({ preset: 'low', rounds: 7, apply: null, emit: (e) => { if (e.type === 'phase') seen.add(e.format || e.key); if (e.type === 'pairs') pairs.push(e); } });
-      assert.strictEqual(s.status, 'decided'); assert.strictEqual(s.plan.length, 7);
-      for (const f of ['floor', 'cross', 'devil', 'duel', 'premortem', 'steelman', 'closing', 'redteam', 'rebuttal', 'risk', 'chair']) assert.ok(seen.has(f), 'phase ' + f);
+      const s = await session.run({ preset: 'low', rounds: 8, apply: null, emit: (e) => { if (e.type === 'phase') seen.add(e.format || e.key); if (e.type === 'pairs') pairs.push(e); if (e.type === 'hunt') hunts.push(e); if (e.type === 'reveal') reveals.push(e); } });
+      assert.strictEqual(s.status, 'decided'); assert.strictEqual(s.plan.length, 8);
+      for (const f of ['round1', 'floor', 'hunt', 'cross', 'shoes', 'devil', 'duel', 'premortem', 'closing', 'redteam', 'rebuttal', 'risk', 'chair']) assert.ok(seen.has(f), 'phase ' + f);
       assert.ok(pairs.length >= 3 && pairs.every((x) => x.pairs.length === 8));
       assert.ok(s.events.some((e) => e.type === 'said' && e.kind === 'question'), 'cross-examination questions recorded');
+      // the blind vote reveals every ballot at once, after all are in; the hunt brings names nobody held
+      assert.strictEqual(reveals.length, 1); assert.strictEqual(reveals[0].seats.length, 8);
+      const r1said = s.events.filter((e) => e.type === 'said' && e.round === 1).map((e) => e.ms), rv = s.events.find((e) => e.type === 'reveal');
+      assert.ok(rv && r1said.every((ms) => ms <= rv.ms), 'reveal after every ballot');
+      const hr = s.rounds.find((r) => r.format === 'hunt'), held = new Set(hunts[0].held);
+      assert.ok(Object.values(hr.proposals).some((p) => p.picks.some((q) => !held.has(q.ticker))), 'the hunt found a new name');
       await session.applyDecision(s, 'open');
       assert.strictEqual(s.status, 'done'); assert.strictEqual(s.applied.mode, 'open');
       const L = store.readLines('demo-ledger.jsonl'); assert.strictEqual(L.length, 2); assert.strictEqual(L[1].apply, 'open');
@@ -185,6 +191,18 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name)
     for (const r of ['member', 'analyst', 'scout']) assert.ok(P.soul(a, r).text.includes('Income first. Never chase.'));
     assert.ok(/All councils/.test(indexer.readme({ name: a.name, awareness: a.awareness, series: [], positions: [], capital: 1e5 })));
     const root = indexer.rootReadme(list.map((c) => ({ council: c, state: null }))); assert.ok(root.includes('[Dividend Guardians](council-dividend-guardians/README.md)'));
+  });
+  await t('calendar: exchange rules, the Fed page, and a short brief for the council', () => {
+    const cal = require('../engine/data/calendar');
+    const h = cal.holidays(2026);
+    assert.strictEqual(h['2026-11-26'], 'Thanksgiving'); assert.strictEqual(h['2026-04-03'], 'Good Friday'); assert.strictEqual(h['2026-07-03'], 'Independence Day'); assert.strictEqual(h['2026-12-25'], 'Christmas');
+    assert.ok(!cal.isTradingDay('2026-11-26') && cal.isTradingDay('2026-11-27'));
+    const r = cal.ruleEvents('2026-12-01', '2026-12-31');
+    assert.ok(r.some((e) => e.date === '2026-12-18' && e.title === 'Quad witching'));
+    const html = '<h4><a id="1">2027 FOMC Meetings</a></h4><div class="fomc-meeting__month col"><strong>January</strong></div><div class="fomc-meeting__date col">26-27</div><div class="fomc-meeting__month col"><strong>Apr/May</strong></div><div class="fomc-meeting__date col">30-1*</div>';
+    assert.deepStrictEqual(cal.parseFomc(html), { '2027-01-27': false, '2027-05-01': true });
+    const b = cal.brief({ from: '2026-11-04', events: [{ date: '2026-11-06', kind: 'macro', tier: 1, title: 'Jobs report', expected: '63K', detail: '' }, { date: '2026-11-17', kind: 'earnings', tier: 2, ticker: 'NVDA', title: 'NVIDIA earnings', when: 'after the close', detail: '' }] });
+    assert.ok(/Fri, Nov 6: Jobs report \(expected 63K\)/.test(b) && /Earnings: NVDA \(post\)/.test(b));
   });
   await t('every seat and officer has its own personality', () => {
     const all = { ...C.SEATS, ...C.OFFICERS }, ps = Object.values(all).map((x) => x.persona);

@@ -14,6 +14,7 @@ const prices = require('./data/prices');
 const sec = require('./data/sec');
 const newsSrc = require('./data/news');
 const macroSrc = require('./data/macro');
+const calSrc = require('./data/calendar');
 const demo = require('./demo');
 
 const SEAT = { ...C.SEATS, ...C.OFFICERS };
@@ -60,19 +61,20 @@ async function gather({ signal, emit, settings = {} }) {
   health.fundamentals = Object.values(fund.byTicker).filter((x) => x && x.revTTM).length;
   health.news = Object.values(news).filter((n) => n.length).length;
   step('macro', 'Macro and rates');
-  const [headlines, fred, vol] = await Promise.all([
+  const [headlines, fred, vol, calendar] = await Promise.all([
     within(60e3, 'Macro headlines', (sg) => newsSrc.macroNews(C.MACRO_FEEDS, { signal: sg, cutoff })).then((x) => x || []),
     within(60e3, 'FRED rates', (sg) => macroSrc.fred(C.FRED, { signal: sg })).then((x) => x || {}),
     within(30e3, 'Volatility', (sg) => macroSrc.vol({ signal: sg })).then((x) => x || {}),
+    within(45e3, 'Market calendar', (sg) => calSrc.upcoming({ days: 42, signal: sg })).then((x) => x || null),
   ]);
-  health.fred = Object.keys(fred).length; health.headlines = headlines.length;
+  health.fred = Object.keys(fred).length; health.headlines = headlines.length; health.calendar = calendar?.events?.length || 0;
   emit({ type: 'progress', key: 'macro', label: 'Macro', done: 1, total: 1 });
 
   const metrics = {}, context = {};
   for (const u of U) metrics[u[0]] = M.compute(u[0], hist[u[0]], hist.SPY, fund.byTicker[u[0]]);
   for (const [s] of C.CONTEXT) context[s] = M.compute(s, hist[s], null, null);
   M.percentiles(Object.values(metrics), ['mom12_1', 'r3m']);
-  return { asOf: cutoff, hist, metrics, context, news, filings, headlines, fred, vol, health };
+  return { asOf: cutoff, hist, metrics, context, news, filings, headlines, fred, vol, calendar, health };
 }
 
 /* ── Council machinery ────────────────────────────────────────────────────── */
@@ -132,13 +134,13 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
   if (!llm.isMock() && !llm.hasKey()) throw Object.assign(new Error('ANTHROPIC_API_KEY is not set.'), { code: 'NO_KEY' });
   // Keep a compact log of the session so the chamber can replay it later.
   const rec = [], t0 = Date.now(), live = emit;
-  emit = (e) => { if (['start', 'phase', 'turn', 'said', 'final', 'pairs'].includes(e.type) || (e.type === 'desk' && e.state !== 'reading')) rec.push({ ...e, ms: Date.now() - t0 }); live(e); };
+  emit = (e) => { if (['start', 'phase', 'turn', 'said', 'final', 'pairs', 'reveal', 'hunt'].includes(e.type) || (e.type === 'desk' && e.state !== 'reading')) rec.push({ ...e, ms: Date.now() - t0 }); live(e); };
   const s = makeSession(preset, trigger); s.device = device; s.plan = plan;
   if (council) s.council = { id: council.id, name: council.name, awareness: council.awareness || '' };
   const soulOf = (role) => { const b = P.soul(council, role); return b ? [b] : []; };
   const ledgerFile = s.demo ? 'demo-ledger.jsonl' : 'ledger.jsonl';
   const phases = ['data', 'analysts', 'scout', 'round1', ...plan.map((_, i) => 'debate' + (i + 1)), 'redteam', 'rebuttal', 'risk', 'chair', 'record'];
-  const LABEL = { data: 'Gathering the evidence', analysts: 'The desk reads the universe', scout: 'Scout searches the web', round1: 'Opening proposals', redteam: 'The red team attacks', rebuttal: 'Rebuttals', risk: 'Risk review', chair: 'The chair decides', record: 'The decision' };
+  const LABEL = { data: 'Gathering the evidence', analysts: 'The desk reads the universe', scout: 'Scout searches the web', round1: 'The blind vote', redteam: 'The red team attacks', rebuttal: 'Rebuttals', risk: 'Risk review', chair: 'The chair decides', record: 'The decision' };
   const labelOf = (k) => LABEL[k] || (k.startsWith('debate') ? C.FORMATS[plan[+k.slice(6) - 1]].label : k);
   const phase = (key) => emit({ type: 'phase', key, label: labelOf(key), format: key.startsWith('debate') ? plan[+key.slice(6) - 1] : null, i: phases.indexOf(key), n: phases.length });
   emit({ type: 'start', session: { id: s.id, preset, trigger, demo: s.demo, plan, members: cfg.members, officers: ['vex', 'sentinel', 'arbiter'], phases: phases.map((k) => ({ key: k, label: labelOf(k), format: k.startsWith('debate') ? plan[+k.slice(6) - 1] : null })) } });
@@ -186,10 +188,11 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
 
     /* 3. Scout (high preset): live web research shared with every seat. */
     let scout = null;
+    const calNote = D.calendar?.events?.length ? `\n\nThe council already has the dates of the scheduled events below. Do not spend searches finding dates; search what the market expects from the ones that matter and anything unscheduled.\n\n${calSrc.brief(D.calendar)}` : '';
     {
       phase('scout');
       const ask = (tool, extra = '') => seatCall(s, emit, { seat: 'scout', round: 0, kind: 'scout', model: cfg.scout.model, effort: cfg.scout.effort, signal, maxTokens: 24000,
-        system: [{ type: 'text', text: P.SCOUT }, ...soulOf('scout')], user: `Today is ${new Date().toUTCString()}. The council's universe is ${tickers.join(', ')}. Brief the council.${extra}`,
+        system: [{ type: 'text', text: P.SCOUT }, ...soulOf('scout')], user: `Today is ${new Date().toUTCString()}. The council's universe is ${tickers.join(', ')}. Brief the council.${calNote}${extra}`,
         tools: [{ type: tool, name: 'web_search', max_uses: cfg.scout.searches }], mock: () => demo.scout(mockCtx) });
       const okSearches = () => s.calls.at(-1)?.usage?.web_search_ok ?? 99;
       try {
@@ -206,20 +209,21 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
     s.scout = scout;
 
     /* 4. The market book every seat reads. One shared, cached prefix. */
-    const book = B.marketBook({ asOf: D.asOf, macro, scout, portfolio: B.portfolioSection(state), metrics: D.metrics, reports: s.reports, news: D.news, filings: D.filings });
+    const book = B.marketBook({ asOf: D.asOf, macro, calendar: calSrc.brief(D.calendar), scout, portfolio: B.portfolioSection(state), metrics: D.metrics, reports: s.reports, news: D.news, filings: D.filings });
     s.briefHash = sha256(book);
     const system = [{ type: 'text', text: P.CHARTER }, ...soulOf('member'), { type: 'text', text: book, cache_control: { type: 'ephemeral' } }];
     const today = `Today is ${new Date().toUTCString()}.`;
 
-    /* 5. Round 1: independent proposals. Nobody sees anyone else. */
+    /* 5. The blind vote: every seat proposes privately, then the ballots are revealed together. */
     phase('round1');
     let props = {};
-    const member = (k, round, user) => (onStart) => seatCall(s, (ev) => { if (ev.type === 'think' || ev.type === 'speak') onStart(); emit(ev); }, {
-      seat: k, round, kind: 'member', model: cfg.member.model, effort: cfg.member.effort, system, user, schema: P.SCHEMA.member, signal, mock: () => demo.member(k, round, mockCtx, props),
+    const member = (k, round, user, fmt) => (onStart) => seatCall(s, (ev) => { if (ev.type === 'think' || ev.type === 'speak') onStart(); emit(ev); }, {
+      seat: k, round, kind: 'member', model: cfg.member.model, effort: cfg.member.effort, system, user, schema: P.SCHEMA.member, signal, mock: () => demo.member(k, round, mockCtx, props, fmt),
     }).then((d) => { props[k] = d; onStart(); return d; }, (e) => { onStart(); throw e; });
-    const r1 = (k) => `${today}\n\n${who(k)}\n\nRound 1. You have not seen anyone else's view. Propose the portfolio you believe is best right now, from the whole universe, judged by your mandate. Hold as many or as few names as you judge best, at any weights; weights plus cash add up to 100. Leave "responses" empty.`;
+    const r1 = (k) => `${today}\n\n${who(k)}\n\nThe blind vote. Your ballot is sealed: no seat sees any other seat's view until every ballot is in, and then all are revealed together. Do not guess what the others will say or position against them. Propose the portfolio you believe is best right now, from the whole universe, judged by your mandate. Hold as many or as few names as you judge best, at any weights; weights plus cash add up to 100. Leave "responses" empty.`;
     await settled(warmParallel(cfg.members.map((k) => member(k, 1, r1(k))), 6), s, emit);
     s.rounds.push({ key: 'round1', proposals: { ...props } });
+    emit({ type: 'reveal', round: 1, seats: cfg.members.filter((k) => props[k]) });
 
     /* 6. Debate rounds, each in its own format (see C.FORMATS). */
     const cast = cfg.members;
@@ -249,6 +253,17 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
         ask = fmt === 'duel'
           ? (k) => `${intro(k)} You are paired with ${nameOf(pairs[k])}, the seat whose portfolio is furthest from yours. Rebut their proposal directly: where exactly are they wrong, with evidence from the market book, and what in their case do you have no answer to? Put your rebuttal in "responses" addressed to ${nameOf(pairs[k])}.\n\n${nameOf(pairs[k])}'s proposal:\n${fmtProposal(pairs[k], snap[pairs[k]])}\n\n${mine(k)}\n\n${tail}`
           : (k) => `${intro(k)} Steelman ${nameOf(pairs[k])}, whose view is furthest from yours: make the strongest honest case for their portfolio, better than they made it themselves. Then say what in it you now accept. Put the steelman in "responses" addressed to ${nameOf(pairs[k])}.\n\n${nameOf(pairs[k])}'s proposal:\n${fmtProposal(pairs[k], snap[pairs[k]])}\n\n${mine(k)}\n\n${tail}`;
+      } else if (fmt === 'shoes') {
+        // Each seat argues as the seat it disagrees with most: that seat's mandate and character, not its own.
+        const far = farthest(snap, cast);
+        emit({ type: 'pairs', round, format: fmt, pairs: cast.map((k) => [k, far[k]]) });
+        const asSeat = (x) => `${nameOf(x)}, the council's ${SEAT[x].role}. Their mandate: ${SEAT[x].mandate || ''} Their character: ${SEAT[x].persona}`;
+        ask = (k) => `${intro(k)} Step into the shoes of ${asSeat(far[k])}\n\nThey are the seat whose portfolio is furthest from yours. For this round, think the way they do. Rebuild the council's portfolio from scratch as ${nameOf(far[k])} would build it from the market book, with their mandate, their temperament and their blind spots, and explain their reasoning better than they did. Put that in "responses" addressed to ${nameOf(far[k])}: the names and weights they should hold, and why. Then step back into your own seat and say what their view taught you.\n\n${nameOf(far[k])}'s current proposal:\n${fmtProposal(far[k], snap[far[k]])}\n\n${mine(k)}\n\nYour revised proposal is your own, judged by your own mandate. ${tail}`;
+      } else if (fmt === 'hunt') {
+        // The council's blind spots: names nobody holds. Each seat brings one to the table.
+        const held = [...new Set(cast.flatMap((x) => (snap[x]?.picks || []).map((p) => p.ticker)))];
+        emit({ type: 'hunt', round, held });
+        ask = (k) => `${intro(k)} The hunt. The council has been looking at the same names. These ${held.length} companies are already held by at least one seat: ${held.join(', ') || 'none'}.\n\nGo through the rest of the universe and the desk's dossiers and find the one company nobody holds that most deserves a place, judged by your mandate. Pitch it: what the council is missing, the evidence, and what would prove you wrong. Put the pitch in "responses" addressed to the council, starting with the ticker. Add it to your own proposal at a weight you would defend, unless the evidence truly finds nothing; then say so plainly.\n\n${mine(k)}\n\nThe consensus so far: ${cons}\n\n${tail}`;
       } else if (fmt === 'devil') {
         ask = (k) => `${intro(k)} Play devil's advocate against yourself. Take your two largest picks and attack each as hard as the evidence allows: the bear case, the crowding, the valuation, the scenario that breaks it. Then decide, honestly, whether each survives. Put the attacks in "responses" addressed to yourself (${nameOf(k)}).\n\n${mine(k)}\n\nThe consensus so far: ${cons}\n\n${tail}`;
       } else if (fmt === 'premortem') {
@@ -258,7 +273,7 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
       } else {
         ask = (k) => `${intro(k)} Open floor. ${mine(k)}\n\nThe other seats proposed:\n${others(k)}\n\nThe consensus so far: ${cons}\n\nChallenge the weakest arguments you see, by seat name and with evidence, and concede where someone is right. Put your challenges in "responses". ${tail}`;
       }
-      await settled(warmParallel(cast.map((k) => member(k, round, ask(k))), 6), s, emit);
+      await settled(warmParallel(cast.map((k) => member(k, round, ask(k), fmt)), 6), s, emit);
       s.rounds.push({ key, format: fmt, proposals: { ...props } });
     }
 

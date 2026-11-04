@@ -108,6 +108,7 @@
       store.set('councils', LIST);
     } catch (e) { loadErr = e; if (!quiet) toast('Could not reach GitHub. Showing what was here before.'); if (!S) S = store.get(lastKey()); }
     if (S) store.set(lastKey(), S);
+    renderPill();
     picker(); status(); render(page);
   }
   /* The council in the top bar. */
@@ -539,8 +540,64 @@
     if (page !== 'home') { go('home'); return true; }
     return false;
   };
+
+  /* ── The market calendar: a pill at the top with what is coming, and a dropdown of the next six weeks ── */
+  const KIND = { fed: { c: '#ffd76a', l: 'Fed' }, macro: { c: '#33c3ff', l: 'Data' }, earnings: { c: '#2fd6a8', l: 'Earnings' }, market: { c: '#b58cff', l: 'Market' } };
+  let CAL = store.get('cal'), calF = 'all', calLoading = null;
+  const todayNY = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const dayDiff = (d) => Math.round((Date.parse(d + 'T12:00:00Z') - Date.parse(todayNY() + 'T12:00:00Z')) / 864e5);
+  const whenWord = (d) => { const n = dayDiff(d); return n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : n < 7 ? new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }) : `In ${n} days`; };
+  const heldSet = () => new Set((S?.positions || []).map((p) => p.t));
+  async function loadCal(fresh) {
+    if (calLoading) return calLoading;
+    calLoading = E.calendar.upcoming({ days: 42, fresh }).then((c) => { CAL = c; store.set('cal', c); renderPill(); if ($('#evpop').classList.contains('on')) renderPop(); }, () => {}).finally(() => { calLoading = null; });
+    return calLoading;
+  }
+  /* The most important thing still ahead: the Fed or a big release first, then earnings of a holding, then anything. */
+  function nextBig() {
+    const ev = (CAL?.events || []).filter((e) => dayDiff(e.date) >= 0), held = heldSet();
+    const soon = (f) => ev.filter(f).find((e) => dayDiff(e.date) <= 10);
+    return soon((e) => e.tier === 1) || soon((e) => e.kind === 'earnings' && held.has(e.ticker)) || ev.find((e) => e.tier <= 2) || ev[0] || null;
+  }
+  function renderPill() {
+    const e = nextBig(), p = $('#evpill');
+    if (!e) { $('#evT').textContent = 'Calendar'; p.style.setProperty('--c', '#a9adbd'); return; }
+    p.style.setProperty('--c', KIND[e.kind].c);
+    $('#evT').innerHTML = `<b>${esc(e.kind === 'earnings' ? C.label(e.ticker) + ' earnings' : e.title)}</b><span>${esc(whenWord(e.date))}</span>`;
+    p.classList.toggle('today', dayDiff(e.date) === 0);
+  }
+  function renderPop() {
+    const pop = $('#evpop'), held = heldSet();
+    if (!CAL) { pop.innerHTML = '<div class="evh"><b>Coming up</b></div><div class="evempty">Reading the calendar…</div>'; return; }
+    const ev = CAL.events.filter((e) => dayDiff(e.date) >= 0 && (calF === 'all' || (calF === 'macro' ? e.kind === 'fed' || e.kind === 'macro' : calF === 'held' ? e.kind === 'earnings' && held.has(e.ticker) : e.kind === calF)));
+    const byDay = {}; for (const e of ev) (byDay[e.date] ||= []).push(e);
+    const chips = [['all', 'All'], ['macro', 'Fed & data'], ['earnings', 'Earnings'], ['held', 'Our holdings'], ['market', 'Market']];
+    const row = (e) => {
+      const k = KIND[e.kind], isHeld = e.kind === 'earnings' && held.has(e.ticker);
+      const ico = e.kind === 'earnings' ? mark(e.ticker, 28) : `<span class="evk" style="--c:${k.c}">${e.kind === 'fed' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/></svg>' : e.kind === 'macro' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>'}</span>`;
+      return `<div class="evr t${e.tier}${isHeld ? ' held' : ''}" style="--c:${k.c}">${ico}<div><b>${esc(e.title)}${e.usual ? ' <em>usual date</em>' : ''}${isHeld ? ' <em class="hd">Held</em>' : ''}${e.tier === 1 ? ' <em class="big">Big</em>' : ''}</b><small>${esc(e.detail || '')}</small></div></div>`;
+    };
+    pop.innerHTML = `<div class="evh"><b>Coming up</b><span>Next six weeks</span></div>
+      <div class="evf">${chips.map(([k, l]) => `<button class="${calF === k ? 'on' : ''}" data-f="${k}">${l}</button>`).join('')}</div>
+      <div class="evl">${Object.keys(byDay).length ? Object.entries(byDay).map(([d, es]) => { const n = dayDiff(d), dt = new Date(d + 'T12:00:00Z'); return `<div class="evd"><div class="evdt${n === 0 ? ' now' : ''}"><b>${dt.getUTCDate()}</b><span>${dt.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase()}</span><i>${esc(n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : dt.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }))}</i></div><div class="evrs">${es.map(row).join('')}</div></div>`; }).join('') : '<div class="evempty">Nothing here in the next six weeks.</div>'}</div>
+      <div class="evfoot">From the Federal Reserve, Nasdaq's public calendars and exchange rules. The council reads the next three weeks before every meeting.${CAL.asOf ? ' Updated ' + new Date(CAL.asOf).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) + '.' : ''}</div>`;
+    pop.querySelectorAll('.evf button').forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); calF = b.dataset.f; renderPop(); }));
+  }
+  function calendarPill() {
+    const p = $('#evpill'), pop = $('#evpop');
+    const close = () => { pop.classList.remove('on'); p.classList.remove('open'); };
+    p.onclick = (e) => { e.stopPropagation(); if (pop.classList.toggle('on')) { p.classList.add('open'); if (innerWidth >= 900) { const r = p.getBoundingClientRect(); pop.style.right = Math.max(12, innerWidth - r.right) + 'px'; } else pop.style.right = ''; renderPop(); if (!CAL || Date.now() - CAL.asOf > 6 * 3600e3) loadCal(true); } else close(); };
+    pop.onclick = (e) => e.stopPropagation();
+    document.addEventListener('click', close);
+    addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    renderPill();
+    if (!CAL || Date.now() - CAL.asOf > 3 * 3600e3 || CAL.from !== todayNY()) loadCal(); 
+    setInterval(() => { renderPill(); if (Date.now() - (CAL?.asOf || 0) > 6 * 3600e3) loadCal(); }, 10 * 6e4);
+  }
+
   function boot() {
     shell();
+    calendarPill();
     S = store.get(lastKey()) || (CUR === 'council' ? store.get('last') : null);
     picker(); go('home');
     requestAnimationFrame(() => setTimeout(() => document.body.classList.add('ready'), 350));

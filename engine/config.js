@@ -243,19 +243,22 @@ const PRESETS = {
 for (const p of Object.values(PRESETS)) p.members = ALL_SEATS;
 
 /* ── Debate formats ──────────────────────────────────────────────────────────
-   After the opening proposals the council holds 1 to 8 debate rounds (chosen before each meeting, any level).
+   The blind vote always comes first and is not counted: every seat proposes privately, and the ballots are revealed together.
+   After it the council holds 1 to 8 debate rounds (chosen before each meeting, any level).
    Each round has its own format, so the council attacks the problem from a different side every time.
    The last round is always the closing round. calls: model calls per seat in that round. */
 const FORMATS = {
   floor:    { label: 'Open floor',        calls: 1, blurb: 'Everyone sees everyone. Challenge the weakest arguments, concede what is right, revise.' },
   cross:    { label: 'Cross-examination', calls: 2, blurb: 'Each seat puts hard questions to another seat, then answers the questions put to it.' },
+  hunt:     { label: 'The hunt',          calls: 1, blurb: 'Each seat pitches one company from the universe that nobody holds, and makes the case for it.' },
   devil:    { label: "Devil's advocate",  calls: 1, blurb: 'Each seat attacks its own two largest picks as hard as it can, then keeps or cuts them.' },
   duel:     { label: 'Duels',             calls: 1, blurb: 'Seats are paired with the seat they disagree with most and rebut each other directly.' },
+  shoes:    { label: "Opponent's shoes",  calls: 1, blurb: 'Each seat rebuilds the portfolio as the seat it disagrees with most would build it.' },
   premortem:{ label: 'Pre-mortem',        calls: 1, blurb: 'Six months on, the portfolio has lost 20%. Each seat explains why, then fixes it.' },
   steelman: { label: 'Steelman',          calls: 1, blurb: 'Each seat makes the strongest case for the view furthest from its own, then takes what is right.' },
   closing:  { label: 'Closing arguments', calls: 1, blurb: 'Final proposals, with the one reason each seat would give the chair.' },
 };
-const FORMAT_ORDER = ['floor', 'cross', 'devil', 'duel', 'premortem', 'steelman', 'floor'];
+const FORMAT_ORDER = ['floor', 'hunt', 'cross', 'shoes', 'devil', 'duel', 'premortem', 'steelman', 'floor'];
 const ROUNDS = { min: 1, max: 8, default: 3 };
 /* The formats of a meeting with n debate rounds: the last is always the closing round. */
 function roundPlan(n) {

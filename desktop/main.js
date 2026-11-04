@@ -9,7 +9,7 @@ const path = require('path'), fs = require('fs'), { pathToFileURL } = require('u
 const APP_DIR = path.join(__dirname, '..', 'app');
 const SEC_UA = 'OazyResearch/3.0 (personal research) 158115534+jpcpais01@users.noreply.github.com';
 // Free sources the council reads. They answer browsers without CORS headers, so the app adds them.
-const DATA_HOSTS = /(^|\.)(finance\.yahoo\.com|sec\.gov|news\.google\.com|stlouisfed\.org|cboe\.com|gdeltproject\.org)$/i;
+const DATA_HOSTS = /(^|\.)(finance\.yahoo\.com|sec\.gov|news\.google\.com|stlouisfed\.org|cboe\.com|gdeltproject\.org|nasdaq\.com|federalreserve\.gov)$/i;
 const SEC_HOSTS = /(^|\.)sec\.gov$/i;
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);

@@ -10,12 +10,12 @@ const SHOW = (() => {
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const TAU = Math.PI * 2, now = () => performance.now() / 1000;
-  const ACT_COLOR = { data: '#33a8ff', analysts: '#2fd6a8', scout: '#ff9f5a', round1: '#8b7bff', floor: '#8b7bff', cross: '#33c3ff', devil: '#ff6b81', duel: '#ffb547', premortem: '#ff5c7a', steelman: '#2fd6a8', closing: '#ffd76a', redteam: '#ff4d6d', rebuttal: '#ff8fa3', risk: '#dfe3f0', chair: '#ffd76a', record: '#ffd76a' };
+  const ACT_COLOR = { data: '#33a8ff', analysts: '#2fd6a8', scout: '#ff9f5a', round1: '#a99bff', floor: '#8b7bff', hunt: '#9ad94a', shoes: '#ff8ad8', cross: '#33c3ff', devil: '#ff6b81', duel: '#ffb547', premortem: '#ff5c7a', steelman: '#2fd6a8', closing: '#ffd76a', redteam: '#ff4d6d', rebuttal: '#ff8fa3', risk: '#dfe3f0', chair: '#ffd76a', record: '#ffd76a' };
   const ACT_SUB = {
     data: `Two years of prices for ${C.UNIVERSE.length} companies, SEC filings, company news, rates, credit and volatility.`,
     analysts: 'The research desk writes a dossier on every single name. Nothing is filtered out.',
     scout: 'Scout searches the live web for what moved markets this week and what is coming next.',
-    round1: 'Eight seats. Eight mandates. Each proposes the best portfolio without seeing anyone else.',
+    round1: 'Every seat votes in secret. No one sees another ballot until all are in, then they are revealed together.',
     redteam: 'Vex has one job: find what is wrong with where the council is heading.',
     rebuttal: 'Every seat answers the attack. Defend with evidence, or concede and change.',
     risk: 'Sentinel protects the capital. Vetoes and caps are binding on the chair.',
@@ -131,19 +131,19 @@ const SHOW = (() => {
 
   /* ── The director ─────────────────────────────────────────────────────────── */
   let hall = null, Q = [], busy = false, speed = 1, live = false, ended = false, meta = null, cb = {}, acts = [], actIdx = -1, curAct = null;
-  let props = {}, prevProps = {}, thoughts = {}, wallBuilt = false, verdicts = {}, counts = {}, skipping = false, timers = [], beatToken = 0, finalShown = false;
+  let ballots = null, huntHeld = null, props = {}, prevProps = {}, thoughts = {}, wallBuilt = false, verdicts = {}, counts = {}, skipping = false, timers = [], beatToken = 0, finalShown = false;
   const wait = (ms) => new Promise((r) => { const tok = beatToken; const id = setTimeout(() => r(tok === beatToken), Math.max(0, ms) / effSpeed()); timers.push({ id, r }); });
   const cancelWaits = () => { const ts = timers; timers = []; for (const t of ts) { clearTimeout(t.id); t.r(false); } };   // a cancelled wait answers false, so its beat stops
   const effSpeed = () => (skipping ? 40 : speed * (live && Q.length > 5 ? Math.min(3, 1 + (Q.length - 5) * .2) : 1));
 
   function open(opts = {}) {
-    cb = opts; live = !!opts.live; ended = false; Q = []; busy = false; props = {}; prevProps = {}; thoughts = {}; verdicts = {}; counts = {}; wallBuilt = false; acts = []; actIdx = -1; curAct = null; skipping = false; finalShown = false; beatToken++; pumpId++;
+    cb = opts; live = !!opts.live; ended = false; Q = []; ballots = null; huntHeld = null; busy = false; props = {}; prevProps = {}; thoughts = {}; verdicts = {}; counts = {}; wallBuilt = false; acts = []; actIdx = -1; curAct = null; skipping = false; finalShown = false; beatToken++; pumpId++;
     cancelWaits();
     const sh = $('#show'); sh.classList.add('on'); sh.setAttribute('aria-hidden', 'false'); document.body.classList.add('showing');
     if (!hall) hall = new Hall($('#showC'), { area: (W, H) => (W < 900 ? { x0: 0, x1: W, y0: 70, y1: H * .62 } : { x0: 0, x1: W - 330, y0: 70, y1: H - 40 }) }); else hall.run || (hall = new Hall($('#showC')));
     for (const k of ALL) Object.assign(hall.seats[k], { tTalk: 0, tThink: 0, tDim: 0, failed: false });
     hall.setMode('hall'); hall.setTint('#8b7bff');
-    ['#shWall', '#shCap', '#shSide', '#shFinal', '#shCard'].forEach((s) => { $(s).classList.remove('on'); $(s).innerHTML = ''; });
+    ['#shWall', '#shCap', '#shSide', '#shFinal', '#shCard', '#shBox'].forEach((s) => { $(s).classList.remove('on'); $(s).innerHTML = ''; });
     document.querySelectorAll('.wall-meta').forEach((n) => n.remove());
     $('#shThink').innerHTML = ''; $('#shCost').textContent = ''; $('#shKick').textContent = live ? 'LIVE' : 'REPLAY'; $('#shTitle').textContent = opts.title || 'The council'; $('#shProg').innerHTML = '';
     $('#shSpeed').textContent = speed + '×';
@@ -165,14 +165,23 @@ const SHOW = (() => {
   function feed(e) {
     switch (e.type) {
       case 'start': meta = e.session; acts = meta.phases.filter((p) => p.key !== 'record'); renderProg(); break;
-      case 'phase': if (e.key !== 'record') push({ type: 'title', key: e.key, label: e.label, format: e.format }); break;
+      case 'phase':
+        if (ballots && !ballots.open) reveal();          // a meeting saved before the reveal was recorded
+        if (e.key !== 'record') push({ type: 'title', key: e.key, label: e.label, format: e.format });
+        if (e.key === 'round1') { ballots = { seats: meta?.members || MEMBERS, said: {}, open: false }; push({ type: 'ballots' }); }
+        break;
       case 'progress': if (live) onProgress(e); break;
       case 'desk': push({ type: 'desk', e }); break;
       case 'turn': if (live) { const s = hall.seats[e.seat]; if (s) s.tThink = 1; } break;
       case 'think': if (live) thoughts[e.seat] = ((thoughts[e.seat] || '') + e.text).slice(-260); break;
       case 'speak': if (live && hall.seats[e.seat]) hall.seats[e.seat].tThink = .6; break;
-      case 'said': push({ type: 'speech', seat: e.seat, kind: e.kind, round: e.round, data: e.data, text: e.text }); break;
+      case 'said':
+        // the blind vote: ballots stay sealed until every seat has voted
+        if (ballots && !ballots.open && e.round === 1 && e.kind === 'member') { ballots.said[e.seat] = e; if (live) sealBallot(e.seat); break; }
+        push({ type: 'speech', seat: e.seat, kind: e.kind, round: e.round, data: e.data, text: e.text }); break;
       case 'pairs': push({ type: 'pairs', pairs: e.pairs, format: e.format }); break;
+      case 'reveal': if (ballots && !ballots.open) reveal(); break;
+      case 'hunt': push({ type: 'hunt', held: e.held || [] }); break;
       case 'cost': $('#shCost').textContent = '$' + (+e.total).toFixed(2); break;
       case 'final': push({ type: 'final', final: e.final, previous: e.previous || [], waiting: !!e.waiting }); break;
       case 'decided': case 'done': ended = true; break;
@@ -181,6 +190,13 @@ const SHOW = (() => {
     }
   }
   function push(b) { Q.push(b); pump(); }
+  /* All ballots open at once: the reveal, then each seat explains its vote. */
+  function reveal() {
+    ballots.open = true;
+    const order = ballots.seats.filter((k) => ballots.said[k]);
+    push({ type: 'reveal', order, said: { ...ballots.said } });
+    for (const k of order) { const e = ballots.said[k]; push({ type: 'speech', seat: e.seat, kind: e.kind, round: e.round, data: e.data, text: e.text }); }
+  }
   let pumpId = 0;
   async function pump() {
     if (busy) return; busy = true; const my = ++pumpId;
@@ -198,6 +214,9 @@ const SHOW = (() => {
     if (b.type === 'desk') return playDesk(b.e);
     if (b.type === 'speech') return playSpeech(b);
     if (b.type === 'pairs') return playPairs(b);
+    if (b.type === 'ballots') return playBallots(b);
+    if (b.type === 'reveal') return playReveal(b);
+    if (b.type === 'hunt') return playHunt(b);
     if (b.type === 'final') return playFinal(b);
     if (b.type === 'failed') return playFailed(b);
   }
@@ -303,7 +322,8 @@ const SHOW = (() => {
     const k = b.seat, S = SEAT[k] || { name: k, role: '', color: '#fff' }, d = b.data || {}, seatSt = hall.seats[k];
     if (!seatSt) return;
     const isMember = b.kind === 'member';
-    if (isMember && d.picks) { if (props[k]) prevProps[k] = props[k]; props[k] = d; }
+    if (isMember && d.picks) { if (props[k] && props[k] !== d) prevProps[k] = props[k]; props[k] = d; }
+    const pitched = isMember && huntHeld && curAct?.format === 'hunt' ? (d.picks || []).filter((p) => !huntHeld.has(p.ticker)).map((p) => p.ticker) : [];
     seatSt.tThink = 0;
     if (skipping) { if (isMember) renderBoard(); return; }
     hall.setMode('stage', k);
@@ -314,13 +334,14 @@ const SHOW = (() => {
     const paras = speechParas(text), words = paras.flat();
     const extras = [];
     if (b.kind === 'question') (d.questions || []).slice(0, 3).forEach((q) => { const to = byName(q.to); extras.push(`<div class="qc">${AV.orb(to || 'arbiter', 26)}<div><b>${esc(q.to)}</b>, ${esc(q.question)}</div></div>`); if (to) hall.beam(k, to, 9000); });
-    if (isMember) (d.responses || []).slice(0, 2).forEach((r) => { const to = byName(r.to); extras.push(`<div class="qc">${AV.orb(to || 'arbiter', 26)}<div><b>To ${esc(r.to)}</b>, ${esc(r.point)}</div></div>`); if (to && to !== k) hall.beam(k, to, 9000); });
+    const toLbl = (r) => (curAct?.format === 'shoes' && byName(r.to) ? `In ${esc(r.to)}'s shoes` : curAct?.format === 'hunt' && !byName(r.to) ? 'The pitch' : 'To ' + esc(r.to));
+    if (isMember) (d.responses || []).slice(0, 2).forEach((r) => { const to = byName(r.to); extras.push(`<div class="qc${curAct?.format === 'shoes' && to ? ' shoes' : ''}">${AV.orb(to || 'arbiter', 26)}<div><b>${toLbl(r)}</b>, ${esc(r.point)}</div></div>`); if (to && to !== k) hall.beam(k, to, 9000); });
     if (b.kind === 'redteam') (d.attacks || []).slice(0, 4).forEach((a) => extras.push(`<div class="qc atk">${AV.orb('vex', 26)}<div><b>${esc(a.target)}</b> <div class="sev">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= a.severity ? 'on' : ''}"></i>`).join('')}</div>${esc(a.argument)}</div></div>`));
     let chips = '';
-    if (isMember && d.picks) chips = d.picks.slice().sort((p, q) => q.weight - p.weight).slice(0, 10).map((p, i) => tkc(p.ticker, p.weight, '', `style="animation-delay:${i * 70}ms"`)).join('');
+    if (isMember && d.picks) chips = d.picks.slice().sort((p, q) => (pitched.includes(q.ticker) - pitched.includes(p.ticker)) || q.weight - p.weight).slice(0, 10).map((p, i) => tkc(p.ticker, p.weight, pitched.includes(p.ticker) ? 'add stamp pitch' : '', `${pitched.includes(p.ticker) ? 'data-s="PITCH" ' : ''}style="animation-delay:${i * 70}ms"`)).join('');
     if (b.kind === 'redteam') chips = (d.cut || []).map((c, i) => tkc(c.ticker, null, 'cut stamp', `data-s="CUT" style="animation-delay:${i * 90}ms"`)).join('');
     if (b.kind === 'risk') chips = [...(d.vetoes || []).map((v) => tkc(v.ticker, null, 'cut stamp', 'data-s="VETO"')), ...(d.caps || []).map((c) => `<span class="tkc">${mark(c.ticker, 24)}${esc(C.label(c.ticker))}<em>≤ ${(+c.max_weight).toFixed(0)}%</em></span>`), `<span class="tkc"><span class="lg cash" style="--s:24px">$</span>Cash ≥ ${(+d.min_cash_pct || 0).toFixed(0)}%</span>`, `<span class="tkc">Sector ≤ ${(+d.max_sector_pct || 0).toFixed(0)}%</span>`].join('');
-    const meta = isMember ? diffLine(k, d) : b.kind === 'scout' ? '<span>Briefing shared with every seat</span>' : b.kind === 'chair' && d.confidence != null ? `<span>Confidence ${d.confidence}/100</span>` : '';
+    const meta = isMember ? (pitched.length ? `<span>Pitched:</span> ${pitched.map((t) => `<span class="up">${esc(C.label(t))}</span>`).join(' · ')} <span>· nobody held ${pitched.length > 1 ? 'these' : 'it'}</span>` : diffLine(k, d)) : b.kind === 'scout' ? '<span>Briefing shared with every seat</span>' : b.kind === 'chair' && d.confidence != null ? `<span>Confidence ${d.confidence}/100</span>` : '';
     const cap = $('#shCap');
     cap.classList.remove('on'); cap.classList.toggle('wide', !$('#shSide').classList.contains('on'));
     cap.style.setProperty('--c', S.color);
@@ -341,11 +362,73 @@ const SHOW = (() => {
     seatSt.tTalk = 0;
   }
 
+  const PAIR_WORD = { cross: 'questions', duel: 'duels', steelman: 'argues for', shoes: 'wears the shoes of' };
   async function playPairs(b) {
     if (skipping) return;
     hall.setMode('hall'); $('#shCap').classList.remove('on');
     for (const [a, c] of b.pairs) if (a !== c) hall.beam(a, c, 4200 / effSpeed());
-    await wait(3600);
+    // who faces whom, listed once (a duel is one pair, not two)
+    const seen = new Set(), rows = b.pairs.filter(([a, c]) => { if (b.format === 'duel') { const id = [a, c].sort().join(); if (seen.has(id)) return false; seen.add(id); } return a !== c; });
+    const box = $('#shBox'), col = ACT_COLOR[b.format] || '#fff';
+    box.className = 'sh-box pairs'; box.style.setProperty('--c', col);
+    box.innerHTML = `<h6>${esc(C.FORMATS[b.format]?.label || '')}</h6><div class="pl">${rows.map(([a, c], i) => `<div class="pr" style="animation-delay:${i * 90}ms">${AV.orb(a, 28)}<b>${esc(seatName(a))}</b><span>${PAIR_WORD[b.format] || (b.format === 'duel' ? '⇄' : '→')}</span><b>${esc(seatName(c))}</b>${AV.orb(c, 28)}</div>`).join('')}</div>`;
+    void box.offsetWidth; box.classList.add('on');
+    await wait(3000 + rows.length * 220);
+    box.classList.remove('on');
+    await wait(400);
+  }
+
+  /* The blind vote. Eight sealed ballots; each seals as its seat votes. Nothing is shown until every one is in. */
+  function ballotHTML(seats) {
+    return `<h6>The blind vote</h6><div class="bn"><b id="bxN">0</b> of ${seats.length} ballots in</div><div class="bl">${seats.map((k, i) => `<div class="ba" data-k="${k}" style="--c:${SEAT[k]?.color || '#fff'};animation-delay:${i * 60}ms"><div class="env"><div class="flap"></div><div class="seal">${AV.orb(k, 30)}</div><div class="lines"><i></i><i></i><i></i></div></div><b>${esc(seatName(k))}</b><span class="bst">Deciding</span></div>`).join('')}</div>`;
+  }
+  function sealBallot(k) {
+    const n = document.querySelector(`#shBox .ba[data-k="${k}"]`); if (!n || n.classList.contains('sealed')) return;
+    n.classList.add('sealed'); n.querySelector('.bst').textContent = 'Sealed';
+    const c = $('#bxN'); if (c) c.textContent = document.querySelectorAll('#shBox .ba.sealed').length;
+  }
+  async function playBallots() {
+    if (skipping || !ballots) return;
+    hall.setMode('hall'); $('#shCap').classList.remove('on');
+    const box = $('#shBox'); box.className = 'sh-box ballots'; box.style.setProperty('--c', ACT_COLOR.round1);
+    box.innerHTML = ballotHTML(ballots.seats); void box.offsetWidth; box.classList.add('on');
+    // already in (a replay, or the show fell behind): seal them one by one, then wait for the rest
+    for (const k of ballots.seats) if (ballots.said[k]) { sealBallot(k); if (!(await wait(260))) return; }
+    while (!ballots.open && live && !ended) { if (!(await wait(400))) return; }
+    for (const k of ballots.seats) if (ballots.said[k]) sealBallot(k);
+  }
+  async function playReveal(b) {
+    for (const k of b.order) { const d = b.said[k].data; if (d?.picks) props[k] = d; }
+    if (skipping) { renderBoard(); return; }
+    const box = $('#shBox');
+    if (!box.classList.contains('ballots')) { box.className = 'sh-box ballots'; box.style.setProperty('--c', ACT_COLOR.round1); box.innerHTML = ballotHTML(b.order); b.order.forEach(sealBallot); void box.offsetWidth; box.classList.add('on'); }
+    if (!(await wait(500))) return;
+    box.querySelector('h6').textContent = 'The ballots are open'; box.querySelector('.bn').innerHTML = 'Revealed together';
+    hall.flash();
+    b.order.forEach((k, i) => {
+      const n = box.querySelector(`.ba[data-k="${k}"]`); if (!n) return;
+      const d = b.said[k].data || {}, top = (d.picks || []).slice().sort((p, q) => q.weight - p.weight).slice(0, 3);
+      n.insertAdjacentHTML('beforeend', `<div class="vote">${top.map((p) => `<span>${mark(p.ticker, 20)}${esc(C.label(p.ticker))}<em>${(+p.weight).toFixed(0)}%</em></span>`).join('')}<small>${(d.picks || []).length} names · ${(+d.cash_pct || 0).toFixed(0)}% cash</small></div>`);
+      setTimeout(() => n.classList.add('open'), i * 120 / effSpeed());
+    });
+    renderBoard();
+    if (!(await wait(2200 + b.order.length * 380))) return;
+    box.classList.remove('on');
+    await wait(500);
+  }
+
+  /* The hunt: the whole universe, with what the council already holds lit. The rest is where the seats go looking. */
+  async function playHunt(b) {
+    huntHeld = new Set(b.held);
+    if (skipping) return;
+    hall.setMode('hall'); $('#shCap').classList.remove('on');
+    const box = $('#shBox'); box.className = 'sh-box hunt'; box.style.setProperty('--c', ACT_COLOR.hunt);
+    const all = C.UNIVERSE.map((u) => u[0]).filter((t) => !C.BENCH.includes(t)), held = all.filter((t) => huntHeld.has(t)).length;
+    box.innerHTML = `<h6>The hunt</h6><div class="bn"><b>${held}</b> held · <b>${all.length - held}</b> nobody owns</div><div class="hm">${all.map((t, i) => `<span class="${huntHeld.has(t) ? 'h' : ''}" title="${esc(UNI[t]?.n || t)}" style="animation-delay:${(i % 40) * 12}ms">${mark(t, 22)}</span>`).join('')}</div><p>Each seat brings one name from the dark back to the table.</p>`;
+    void box.offsetWidth; box.classList.add('on');
+    if (!(await wait(4200))) return;
+    box.classList.remove('on');
+    await wait(400);
   }
 
   /* Where the council leans: the average of every seat's latest proposal, re-sorted as it changes. */
@@ -437,6 +520,7 @@ const SHOW = (() => {
       const el = $('#shThink');
       if (thoughts._log) { el.innerHTML = `<b style="--c:#ffb547">Note</b>${esc(thoughts._log)}`; delete thoughts._log; return; }
       if (!ks.length) { el.innerHTML = ''; return; }
+      if (ballots && !ballots.open) { el.innerHTML = '<b style="--c:#a99bff">Sealed</b>The ballots stay secret until every seat has voted.'; return; }
       const k = ks[i++ % ks.length], t = thoughts[k].replace(/\s+/g, ' ').trim(), cut = t.slice(-150).replace(/^\S*\s/, '');
       el.style.setProperty('--c', SEAT[k].color); el.innerHTML = `<b>${esc(SEAT[k].name)} is thinking</b>…${esc(cut)}`;
     }, 2600);
@@ -459,8 +543,9 @@ const SHOW = (() => {
     const nextTitle = Q.findIndex((b) => b.type === 'title' || b.type === 'final');
     const dropped = nextTitle < 0 ? Q.splice(0) : Q.splice(0, nextTitle);
     for (const b of dropped) { if (b.type === 'speech' && b.kind === 'member' && b.data?.picks) { if (props[b.seat]) prevProps[b.seat] = props[b.seat]; props[b.seat] = b.data; } if (b.type === 'desk') playDesk(b.e); }
+    for (const b of dropped) { if (b.type === 'reveal') for (const k of b.order) if (b.said[k].data?.picks) props[k] = b.said[k].data; if (b.type === 'hunt') huntHeld = new Set(b.held); }
     renderBoard(); skipping = false;
-    $('#shCap').classList.remove('on'); hall.setMode('hall');
+    $('#shCap').classList.remove('on'); $('#shBox').classList.remove('on'); hall.setMode('hall');
     busy = false; pump();
   }
 
