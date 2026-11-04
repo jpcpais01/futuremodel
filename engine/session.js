@@ -183,11 +183,20 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
     let scout = null;
     {
       phase('scout');
+      const ask = (tool, extra = '') => seatCall(s, emit, { seat: 'scout', round: 0, kind: 'scout', model: cfg.scout.model, effort: cfg.scout.effort, signal, maxTokens: 24000,
+        system: [{ type: 'text', text: P.SCOUT }], user: `Today is ${new Date().toUTCString()}. The council's universe is ${tickers.join(', ')}. Brief the council.${extra}`,
+        tools: [{ type: tool, name: 'web_search', max_uses: cfg.scout.searches }], mock: () => demo.scout(mockCtx) });
+      const okSearches = () => s.calls.at(-1)?.usage?.web_search_ok ?? 99;
       try {
-        scout = await seatCall(s, emit, { seat: 'scout', round: 0, kind: 'scout', model: cfg.scout.model, effort: cfg.scout.effort, signal, maxTokens: 24000,
-          system: [{ type: 'text', text: P.SCOUT }], user: `Today is ${new Date().toUTCString()}. The council's universe is ${tickers.join(', ')}. Brief the council.`,
-          tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: cfg.scout.searches }], mock: () => demo.scout(mockCtx) });
-      } catch (e) { if (signal?.aborted || e.code === 'NO_KEY') throw e; s.errors.push('Scout: ' + e.message); }
+        // Plain web search hands the scout readable results; the filtering variant routes them through code and has come back thin.
+        try { scout = await ask('web_search_20250305'); }
+        catch (e) { if (signal?.aborted || e.code === 'NO_KEY' || e.status !== 400) throw e; scout = await ask('web_search_20260209'); }
+        if (!llm.isMock() && okSearches() < 3) {
+          emit({ type: 'log', text: 'Scout: too few searches came back. Searching again.' });
+          const again = await ask('web_search_20250305', ' Your last attempt got too few search results. Use several short, simple queries (one topic each) and keep searching until you have enough to brief the council.');
+          if (again && again.length > (scout || '').length * 0.6) scout = again;
+        }
+      } catch (e) { if (signal?.aborted || e.code === 'NO_KEY') throw e; if (!scout) s.errors.push('Scout: ' + e.message); }
     }
     s.scout = scout;
 

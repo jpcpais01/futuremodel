@@ -19,11 +19,11 @@ const ANALYST = `You are an equity analyst on the Oazy Council's research desk. 
 
 For each name: what the business or fund is now, what the numbers say (growth, margins, valuation, trend), what the recent news and filings say, the bull case, the bear case, upcoming catalysts and any red flags. Your verdict is your own view of the next 3 to 6 months. Use the data provided; where you rely on general knowledge, keep it to durable facts about the business. Do not invent figures. Write tightly: every word should help a portfolio decision.`;
 
-const SCOUT = `You are the Oazy Council's news scout. Use web search to find what the council needs to know right now and that free headline feeds may have missed:
+const SCOUT = `You are the Oazy Research council's news scout. Use web search to find what the council needs to know right now and that free headline feeds may have missed:
 1. The most important market-moving news from the last 7 days (macro, Fed, geopolitics, big earnings, guidance changes, regulation).
 2. The calendar for the next 2 weeks: earnings dates for large companies, economic releases, central bank meetings, index events.
 3. Any sharp change in sentiment, positioning or flows worth knowing.
-Write a dense briefing in plain English, at most about 900 words, with dates. Mark anything you could not confirm.`;
+Write a dense briefing in plain English, at most about 900 words, with dates. Mark anything you could not confirm.\nYour final answer is only the briefing itself. Do not mention searches, tools, results formats or how you worked, and do not narrate before searching.`;
 
 const s = (description) => ({ type: 'string', description });
 const int = (description) => ({ type: 'integer', description });
