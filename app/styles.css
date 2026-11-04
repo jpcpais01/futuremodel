@@ -438,3 +438,4 @@ button.rw:hover{transform:translateX(3px)}
 .hcard .h div{min-width:0;flex:1}
 .qc{line-height:1.5}
 .tkc{white-space:nowrap}
+#shSkip.dim{opacity:.35;pointer-events:none}

@@ -147,6 +147,12 @@ const SHOW = (() => {
     document.querySelectorAll('.wall-meta').forEach((n) => n.remove());
     $('#shThink').innerHTML = ''; $('#shCost').textContent = ''; $('#shKick').textContent = live ? 'LIVE' : 'REPLAY'; $('#shTitle').textContent = opts.title || 'The council'; $('#shProg').innerHTML = '';
     $('#shSpeed').textContent = speed + '×';
+    // Live, the council works at full speed and the show plays its words as they arrive, so it can fall behind.
+    // The speed sets how fast the words are read out; "Catch up" jumps to where the council actually is.
+    $('#shSpeed').title = live ? 'How fast the words are played. The council itself always works at full speed.' : 'Replay speed';
+    $('#shSkip').textContent = live ? 'Catch up' : 'Skip ahead';
+    $('#shSkip').title = live ? 'Jump to what the council is doing right now' : 'Jump to the next act';
+    $('#shSkip').classList.toggle('dim', live);
     if (live) startTicker();
   }
   function close() {
@@ -426,6 +432,7 @@ const SHOW = (() => {
   function startTicker() {
     stopTicker(); let i = 0;
     tick = setInterval(() => {
+      $('#shSkip').classList.toggle('dim', !Q.length);   // nothing to catch up on: the show is at the live edge
       const ks = Object.keys(thoughts).filter((k) => k !== '_log' && hall.seats[k]?.tThink > .1);
       const el = $('#shThink');
       if (thoughts._log) { el.innerHTML = `<b style="--c:#ffb547">Note</b>${esc(thoughts._log)}`; delete thoughts._log; return; }
