@@ -52,6 +52,7 @@ function parseJSON(text) {
 
 /* Demo mode: no API calls. The caller supplies plausible output; this streams it like the real thing. */
 let MOCK = false, SPEED = 1;
+const TOOL_BLOCK = /server_tool_use|_tool_result$/;
 /* speed: 1 streams at a readable pace; tests use a large number. */
 function setMock(v, speed = 1) { MOCK = !!v; SPEED = speed; }
 async function mockCall({ mock, onText, onThinking, signal, schema }) {
@@ -77,8 +78,10 @@ async function call(o) {
   if (MOCK) return mockCall(o);
   const c = getClient(), t0 = Date.now();
   const isHaiku = /haiku/.test(o.model);
-  let messages = o.messages.slice(), text = '', searches = 0, total = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, final, servedBy = o.model;
-  for (let turn = 0; turn < 4; turn++) {
+  let messages = o.messages.slice(), text = '', answer = '', searches = 0, searchOk = 0, searchFailed = 0, usedTools = false,
+    total = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, final, servedBy = o.model;
+  // A tool-using answer can pause many times while the server runs searches; keep going until it finishes.
+  for (let turn = 0; turn < 16; turn++) {
     const params = {
       model: o.model,
       max_tokens: o.maxTokens || 32000,
@@ -94,25 +97,30 @@ async function call(o) {
     let turnText = '';
     for await (const ev of stream) {
       if (ev.type === 'content_block_delta') {
-        if (ev.delta.type === 'text_delta') { turnText += ev.delta.text; o.onText?.(text + turnText); }
+        if (ev.delta.type === 'text_delta') { turnText += ev.delta.text; answer += ev.delta.text; o.onText?.(o.tools ? answer : text + turnText); }
         else if (ev.delta.type === 'thinking_delta') o.onThinking?.(ev.delta.thinking);
-      } else if (ev.type === 'content_block_start' && ev.content_block.type === 'text') {
-        if (turnText) turnText += '\n';
+      } else if (ev.type === 'content_block_start') {
+        const t = ev.content_block.type;
+        if (t === 'text') { if (turnText) turnText += '\n'; if (answer) answer += '\n'; }
+        else if (TOOL_BLOCK.test(t)) { usedTools = true; answer = ''; }   // words written before a search are the model thinking aloud, not the answer
       }
     }
     final = await stream.finalMessage();
     servedBy = final.model || servedBy;
     for (const k of Object.keys(total)) total[k] += final.usage?.[k] || 0;
     searches += final.usage?.server_tool_use?.web_search_requests || 0;
+    for (const b of final.content) if (b.type === 'web_search_tool_result') { if (Array.isArray(b.content)) searchOk++; else searchFailed++; }
     text += final.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
     if (final.stop_reason === 'pause_turn') { messages = [...messages, { role: 'assistant', content: final.content }]; continue; }
     break;
   }
+  if (usedTools && answer.trim()) text = answer.trim();
+  if (final.stop_reason === 'pause_turn') throw Object.assign(new Error('The web research did not finish in time.'), { cost: cost(servedBy, total, searches), usage: total });
   const spent = cost(servedBy, total, searches);
   if (final.stop_reason === 'refusal') throw Object.assign(new Error('The model declined this request.'), { cost: spent, usage: total });
   const data = o.schema ? parseJSON(text) : null;
   if (o.schema && !data) throw Object.assign(new Error(final.stop_reason === 'max_tokens' ? 'The answer was cut off (max tokens).' : 'The answer was not valid JSON.'), { cost: spent, usage: total });
-  return { data, text, usage: { ...total, web_search_requests: searches }, cost: spent, model: servedBy, ms: Date.now() - t0 };
+  return { data, text, usage: { ...total, web_search_requests: searches, web_search_ok: searchOk, web_search_failed: searchFailed }, cost: spent, model: servedBy, ms: Date.now() - t0 };
 }
 
 module.exports = { call, cost, partialField, parseJSON, setMock, hasKey, setKey, isMock: () => MOCK };
