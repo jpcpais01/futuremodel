@@ -110,6 +110,11 @@
     if (S) store.set(lastKey(), S);
     renderPill();
     picker(); status(); render(page);
+    // When GitHub's hourly re-pricing is late, value the portfolio here so an entry that is due shows as entered.
+    if (!loadErr && S && council.stale(S)) {
+      const want = CUR;
+      council.refresh().then((st) => { if (!st || want !== CUR || running) return; S = st; store.set(lastKey(), S); status(); render(page); }, (e) => console.warn('refresh', e));
+    }
   }
   /* The council in the top bar. */
   function picker() {

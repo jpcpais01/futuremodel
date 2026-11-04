@@ -1,7 +1,7 @@
 {
   "name": "oazy-research",
   "productName": "Oazy Research",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "description": "Oazy Research: a council of Claude agents and its paper portfolio",
   "author": "Oazy",
   "private": true,

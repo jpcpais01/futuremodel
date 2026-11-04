@@ -204,6 +204,12 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name)
     const b = cal.brief({ from: '2026-11-04', events: [{ date: '2026-11-06', kind: 'macro', tier: 1, title: 'Jobs report', expected: '63K', detail: '' }, { date: '2026-11-17', kind: 'earnings', tier: 2, ticker: 'NVDA', title: 'NVIDIA earnings', when: 'after the close', detail: '' }] });
     assert.ok(/Fri, Nov 6: Jobs report \(expected 63K\)/.test(b) && /Earnings: NVDA \(post\)/.test(b));
   });
+  await t('the app re-values a record whose entry is due or whose price update is late', () => {
+    const cn = require('../engine/council'), now = Date.parse('2026-11-04T16:00:00Z');
+    assert.ok(cn.stale({ updatedAt: '2026-11-04T07:00:00Z', pending: [{ mode: 'open', on: '2026-11-04' }] }, now), 'entry due at today\'s open');
+    assert.ok(!cn.stale({ updatedAt: '2026-11-04T15:30:00Z', pending: [{ mode: 'open', on: '2026-11-05' }] }, now), 'fresh, entry tomorrow');
+    assert.ok(cn.stale({ updatedAt: '2026-11-04T13:00:00Z', pending: [] }, now), 'price update late');
+  });
   await t('every seat and officer has its own personality', () => {
     const all = { ...C.SEATS, ...C.OFFICERS }, ps = Object.values(all).map((x) => x.persona);
     assert.ok(ps.every((p) => p && p.length > 300)); assert.strictEqual(new Set(ps).size, ps.length);
