@@ -148,7 +148,7 @@
         <div class="kicker"><span class="tag">Paper portfolio</span><small>Starts at ${usd(S?.capital || C.LIMITS.startCapital)}</small></div>
         <div class="big">${CO.awareness ? esc(CO.name) : 'The council'}<br>is ready.</div>
         ${CO.awareness ? `<p class="aw">${esc(CO.awareness)}</p>` : ''}
-        <p>Eight seats argue over the ${C.UNIVERSE.length} largest companies in the world, a red team attacks their plan, the risk manager sets limits and the chair decides. The portfolio starts the moment you apply its first decision.</p>
+        <p>Eight seats argue over the 200 largest companies in the world and ${C.UNIVERSE.filter((u) => u[3] === 'E').length} major ETFs, a red team attacks their plan, the risk manager sets limits and the chair decides. The portfolio starts the moment you apply its first decision.</p>
         <div class="chips" style="gap:12px"><button class="btn gold" data-go="convene">${I.crown}Convene the council</button><button class="btn gh" data-go="rehearse">Rehearse for free</button></div>
       </div><div class="side">${seatsCard()}${councilsCard()}</div></div>`;
       wireHome(el); return;
@@ -338,7 +338,7 @@
     $('#hallK').textContent = CO.name || 'The council';
     const last = (S?.sessions || []).find((m) => m.status === 'done' || m.status === 'skipped');
     $('#hallR').innerHTML = `${CO.awareness ? `<div class="card glass"><h4>Awareness</h4><p class="aw sm">${esc(CO.awareness)}</p></div>` : ''}${last ? `<div class="card glass"><h4>Last meeting</h4><div class="next"><div class="when">${esc(day(last.startedAt, { weekday: 'long', month: 'long', day: 'numeric' }))}</div></div><p>${esc(last.summary || '')}</p><p class="hint">${esc(meetingTitle(last))}${last.confidence != null ? ' · confidence ' + last.confidence : ''}${last.cost ? ' · $' + last.cost.toFixed(2) : ''}</p>${last.replay ? `<button class="btn gh" style="margin-top:14px;width:100%" data-rp="${esc(last.id)}">${I.play}Watch it again</button>` : ''}</div>` : ''}
-      <div class="card glass"><h4>How a meeting runs</h4><ol class="steps">${[`Two years of prices, SEC filings, news and macro for ${C.UNIVERSE.length} companies`, 'The research desk writes a dossier on every name', 'Scout searches the web for what is moving markets', 'Each seat proposes a portfolio on its own', 'Debate rounds, in the formats you choose', 'Vex attacks, every seat answers', 'Sentinel sets binding limits', 'Arbiter decides, and you choose when it enters'].map((t) => `<li>${t}</li>`).join('')}</ol></div>`;
+      <div class="card glass"><h4>How a meeting runs</h4><ol class="steps">${[`Two years of prices, SEC filings, news and macro for ${C.UNIVERSE.length} companies and ETFs`, 'The research desk writes a dossier on every name', 'Scout searches the web for what is moving markets', 'Each seat proposes a portfolio on its own', 'Debate rounds, in the formats you choose', 'Vex attacks, every seat answers', 'Sentinel sets binding limits', 'Arbiter decides, and you choose when it enters'].map((t) => `<li>${t}</li>`).join('')}</ol></div>`;
     $$('[data-rp]', $('#hallR')).forEach((b) => (b.onclick = () => watch(b.dataset.rp)));
   }
 

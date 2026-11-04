@@ -3,9 +3,9 @@
 
 /* ── Universe ────────────────────────────────────────────────────────────────
    The 200 largest companies in the world by market value (companiesmarketcap.com, 4 November 2026), ranked order
-   within each sector. Every name here is read by an analyst on every session. Nothing is cut by code.
+   within each sector, plus 30 of the best known ETFs (broad market, international, bonds, commodities, crypto, sectors). Every name here is read by an analyst on every session. Nothing is cut by code.
    Listings outside the US are priced on their home exchange and converted to US dollars (see data/prices.js).
-   [ticker, name, sector, kind, country]  kind: S = stock */
+   [ticker, name, sector, kind, country]  kind: S = stock, E = ETF */
 const UNIVERSE = [
   // Technology
   ['AAPL', 'Apple', 'Technology', 'S', 'United States'], ['MSFT', 'Microsoft', 'Technology', 'S', 'United States'],
@@ -119,6 +119,24 @@ const UNIVERSE = [
   ['AI.PA', 'Air Liquide', 'Materials', 'S', 'France'], ['NEM', 'Newmont', 'Materials', 'S', 'United States'],
   // Real Estate
   ['WELL', 'Welltower', 'Real Estate', 'S', 'United States'], ['PLD', 'Prologis', 'Real Estate', 'S', 'United States'],
+  // ETFs: thirty of the best known, so the council can hold the market, a region, bonds, gold or a sector in one line
+  ['SPY', 'SPDR S&P 500 ETF', 'Broad market', 'E', 'United States'], ['VOO', 'Vanguard S&P 500 ETF', 'Broad market', 'E', 'United States'],
+  ['QQQ', 'Invesco QQQ (Nasdaq-100)', 'Broad market', 'E', 'United States'], ['VTI', 'Vanguard Total Stock Market ETF', 'Broad market', 'E', 'United States'],
+  ['DIA', 'SPDR Dow Jones Industrial Average ETF', 'Broad market', 'E', 'United States'], ['IWM', 'iShares Russell 2000 (small caps)', 'Broad market', 'E', 'United States'],
+  ['RSP', 'Invesco S&P 500 Equal Weight ETF', 'Broad market', 'E', 'United States'],
+  ['VEA', 'Vanguard Developed Markets ETF', 'International', 'E', 'United States'], ['VWO', 'Vanguard Emerging Markets ETF', 'International', 'E', 'United States'],
+  ['EEM', 'iShares MSCI Emerging Markets ETF', 'International', 'E', 'United States'], ['EWJ', 'iShares MSCI Japan ETF', 'International', 'E', 'United States'],
+  ['FXI', 'iShares China Large-Cap ETF', 'International', 'E', 'United States'],
+  ['AGG', 'iShares Core US Aggregate Bond ETF', 'Bonds', 'E', 'United States'], ['BND', 'Vanguard Total Bond Market ETF', 'Bonds', 'E', 'United States'],
+  ['TLT', 'iShares 20+ Year Treasury Bond ETF', 'Bonds', 'E', 'United States'], ['IEF', 'iShares 7-10 Year Treasury Bond ETF', 'Bonds', 'E', 'United States'],
+  ['SHY', 'iShares 1-3 Year Treasury Bond ETF', 'Bonds', 'E', 'United States'], ['TIP', 'iShares TIPS Bond ETF (inflation-protected)', 'Bonds', 'E', 'United States'],
+  ['LQD', 'iShares Investment Grade Corporate Bond ETF', 'Bonds', 'E', 'United States'], ['HYG', 'iShares High Yield Corporate Bond ETF', 'Bonds', 'E', 'United States'],
+  ['GLD', 'SPDR Gold Shares', 'Commodities', 'E', 'United States'], ['SLV', 'iShares Silver Trust', 'Commodities', 'E', 'United States'],
+  ['USO', 'United States Oil Fund', 'Commodities', 'E', 'United States'],
+  ['IBIT', 'iShares Bitcoin Trust', 'Crypto', 'E', 'United States'],
+  ['XLK', 'Technology Select Sector SPDR', 'Sector ETFs', 'E', 'United States'], ['SMH', 'VanEck Semiconductor ETF', 'Sector ETFs', 'E', 'United States'],
+  ['XLF', 'Financial Select Sector SPDR', 'Sector ETFs', 'E', 'United States'], ['XLE', 'Energy Select Sector SPDR', 'Sector ETFs', 'E', 'United States'],
+  ['XLV', 'Health Care Select Sector SPDR', 'Sector ETFs', 'E', 'United States'], ['ARKK', 'ARK Innovation ETF', 'Sector ETFs', 'E', 'United States'],
 ];
 /* Short labels for listings whose code is long or numeric (what the screens show; the engine keeps the real ticker). */
 const SHORT = { "PRX.AS": "PRX", "6098.T": "RCRT", "6501.T": "HTCH", "6861.T": "KEYN", "005930.KS": "SMSN", "000660.KS": "HYNX", "688825.SS": "CXMT", "2454.TW": "MDTK", "6857.T": "ADVT", "8035.T": "TEL", "0941.HK": "CMOB", "9984.T": "SFTB", "DTE.DE": "DTE", "BHARTIARTL.NS": "BHRT", "600519.SS": "MTAI", "NESN.SW": "NESN", "OR.PA": "OR", "MC.PA": "LVMH", "ITX.MC": "ITX", "RMS.PA": "RMS", "9983.T": "UNQL", "CFR.SW": "CFR", "002594.SZ": "BYD", "601939.SS": "CCB", "601288.SS": "ABC", "1398.HK": "ICBC", "601988.SS": "BOC", "CBA.AX": "CBA", "ALV.DE": "ALV", "3968.HK": "CMB", "D05.SI": "DBS", "601628.SS": "CLI", "601318.SS": "PNGA", "INVE-B.ST": "INVE", "UCG.MI": "UCG", "ISP.MI": "ISP", "ZURN.SW": "ZURN", "RO.SW": "ROG", "SIE.DE": "SIE", "300750.SZ": "CATL", "AIR.PA": "AIR", "ABBN.SW": "ABB", "SU.PA": "SU", "RR.L": "RR", "SAF.PA": "SAF", "601138.SS": "FII", "ENR.DE": "ENR", "2222.SR": "ARMC", "0857.HK": "PTR", "RELIANCE.NS": "RELI", "601088.SS": "SHEN", "0883.HK": "CNOC", "IBE.MC": "IBE", "AI.PA": "AI", "BRK-B": "BRK.B" };

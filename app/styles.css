@@ -290,11 +290,12 @@ button.rw:hover{transform:translateX(3px)}
 .sh-side.on{opacity:1;transform:none}
 .sh-side h5{font-size:10.5px;font-weight:700;letter-spacing:.2em;color:rgba(255,255,255,.5);text-transform:uppercase;margin-bottom:12px;display:flex;justify-content:space-between}
 .cb{position:relative;flex:1;min-height:0}
-.cbr{position:absolute;left:0;right:0;height:32px;display:grid;grid-template-columns:24px 52px 1fr 46px;gap:9px;align-items:center;font-size:13px;font-weight:600;transition:transform .9s var(--ease),opacity .6s}
+.cbr{position:absolute;left:0;right:0;height:var(--rh,32px);display:grid;grid-template-columns:24px 52px 1fr 46px;gap:9px;align-items:center;font-size:13px;font-weight:600;transition:transform .9s var(--ease),opacity .6s}
 .cbr .lg{--s:24px;border-radius:50%}
 .cbr .bar{height:6px;border-radius:9px;background:rgba(255,255,255,.07);overflow:hidden}.cbr .bar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,rgba(255,215,106,.35),#ffd76a);transition:width 1s var(--ease)}
 .cbr em{font-style:normal;text-align:right;color:var(--dim)}
 .cbr.new{animation:fd .7s var(--ease)}
+.cbm{font-size:11px;color:var(--dim);padding-top:6px;min-height:16px}
 /* thoughts ticker while seats think */
 .sh-think{position:absolute;z-index:5;left:var(--left);right:var(--left);bottom:28px;height:22px;text-align:center;font:italic 300 15px Outfit,sans-serif;color:rgba(255,255,255,.42);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .6s}
 .sh-think b{font-style:normal;font-weight:600;color:var(--c,#fff);opacity:.85;margin-right:8px}
