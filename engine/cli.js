@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Command line for the council index. GitHub runs `update` on a schedule (.github/workflows/index.yml); it only marks prices.
-//   node engine/cli.js update                     rebuild index/council/state.json, index/README.md and index/chart.svg
-//   node engine/cli.js session --demo [--preset low|normal|high] [--rounds 1-8] [--apply now|open|YYYY-MM-DD]
+//   node engine/cli.js update                     rebuild every council's state.json, README.md and chart.svg, and index/README.md
+//   node engine/cli.js session --demo [--council id] [--preset low|normal|high] [--rounds 1-8] [--apply now|open|YYYY-MM-DD]
 //                                                 a meeting from the command line (the app is the normal way to hold one)
 //   node engine/cli.js estimate                   cost per meeting for each level and round count
 //   node engine/cli.js verify                     check the ledger's hash chain
@@ -20,14 +20,27 @@ const opt = (k, d) => { const i = args.indexOf('--' + k); return i >= 0 ? args[i
 const flag = (k) => args.includes('--' + k);
 if (flag('demo')) llm.setMock(true);
 const INDEX = path.resolve(opt('dir', path.join(__dirname, '..', 'index')));
-fs.mkdirSync(path.join(INDEX, 'council'), { recursive: true });
-store.use(require('./store-fs')(path.join(INDEX, 'council')));
+const CO = require('./councils');
+const councils = () => CO.parse(fs.existsSync(path.join(INDEX, 'councils.json')) ? fs.readFileSync(path.join(INDEX, 'councils.json'), 'utf8') : null);
+const which = councils().find((c) => c.id === opt('council', 'council')) || councils()[0];
+const useCouncil = (c) => { fs.mkdirSync(path.join(INDEX, c.id), { recursive: true }); return store.use(require('./store-fs')(path.join(INDEX, c.id))); };
+useCouncil(which);
 
+/* Rebuilds every council's files, then the page that shows them side by side. Prices are shared between councils. */
 async function writeIndex() {
-  const out = await indexer.build({ prior: store.readJSON('state.json'), log: (m) => console.log(m) });
-  fs.writeFileSync(path.join(INDEX, 'council', 'state.json'), out.json);
-  fs.writeFileSync(path.join(INDEX, 'README.md'), out.readme);
-  fs.writeFileSync(path.join(INDEX, 'chart.svg'), out.chart);
+  const all = [], shared = path.join(INDEX, which.id, 'prices');
+  for (const c of councils()) {
+    const b = useCouncil(c);
+    if (c.id !== which.id) for (const f of (fs.existsSync(shared) ? fs.readdirSync(shared) : [])) if (b.read('prices/' + f) == null) b.write('prices/' + f, fs.readFileSync(path.join(shared, f), 'utf8'));
+    const out = await indexer.build({ prior: store.readJSON('state.json'), council: c, log: (m) => console.log(m) });
+    fs.writeFileSync(path.join(INDEX, c.id, 'state.json'), out.json);
+    fs.writeFileSync(path.join(INDEX, c.id, 'README.md'), out.readme);
+    fs.writeFileSync(path.join(INDEX, c.id, 'chart.svg'), out.chart);
+    all.push({ council: c, state: out.state });
+  }
+  fs.writeFileSync(path.join(INDEX, 'README.md'), indexer.rootReadme(all));
+  fs.writeFileSync(path.join(INDEX, 'chart.svg'), indexer.chartSvg(all.map((x) => x.state)));
+  useCouncil(which);
 }
 
 function printer() {
@@ -48,7 +61,7 @@ function printer() {
   else if (cmd === 'session') {
     const preset = opt('preset', 'normal'), rounds = +opt('rounds', C.ROUNDS.default);
     console.log(`Convening the council (${C.PRESETS[preset].label}, ${rounds} rounds${llm.isMock() ? ', demo' : ''}). Estimated cost $${session.estimate(preset, rounds).mid.toFixed(2)}.`);
-    await session.run({ preset, rounds, trigger: 'cli', emit: printer(), apply: opt('apply', 'open'), device: opt('device', 'command line') });
+    await session.run({ preset, rounds, trigger: 'cli', emit: printer(), apply: opt('apply', 'open'), device: opt('device', 'command line'), council: which });
     if (!llm.isMock()) await writeIndex();
   } else if (cmd === 'estimate') {
     for (const k of Object.keys(C.PRESETS)) console.log(`${C.PRESETS[k].label.padEnd(7)} ` + [1, 2, 3, 4, 5, 6, 7, 8].map((r) => `${r}: $${session.estimate(k, r).mid.toFixed(2)}`).join('  '));

@@ -1,11 +1,12 @@
-// The council's paper index, kept in the repository under index/.
+// The councils' paper indexes, kept in the repository under index/. Each council has its own folder (see councils.js):
 //
-//   index/council/ledger.jsonl   every decision, hash-chained
-//   index/council/state.json     what the apps read: value, record, holdings, price history
-//   index/council/sessions/      every council meeting, with the whole debate
-//   index/README.md, chart.svg   the same numbers, readable on GitHub
+//   index/<council>/ledger.jsonl   every decision, hash-chained
+//   index/<council>/state.json     what the apps read: value, record, holdings, price history
+//   index/<council>/sessions/      every meeting, with the whole debate
+//   index/<council>/README.md, chart.svg   the same numbers, readable on GitHub
+//   index/councils.json, README.md, chart.svg   the list of councils, and all of them side by side
 //
-// The engine's store is rooted at index/council. build() only computes; the command line and the apps write the files.
+// The engine's store is rooted at one council's folder. build() only computes; the command line and the apps write the files.
 // A decision enters when João applies it: at the price of the moment, or at an open he picks (see ledger.js).
 'use strict';
 const C = require('./config');
@@ -15,7 +16,7 @@ const prices = require('./data/prices');
 const M = require('./metrics');
 
 const UNI = Object.fromEntries(C.UNIVERSE.map((u) => [u[0], { t: u[0], n: u[1], s: u[2], k: u[3] }]));
-const META = { name: 'Council', blurb: 'A council of Claude agents that reads 155 names, debates, and holds what it judges the best portfolio.' };
+const CO = require('./councils');
 const histOf = (t) => store.readJSON(`prices/${t.replace(/[^\w.-]/g, '_')}.json`);
 const r2 = (v) => (v == null ? v : Math.round(v * 100) / 100);
 
@@ -38,7 +39,7 @@ function councilInfo(prior) {
 }
 
 /* Rebuilds the council's state from its ledger, its meetings and prices. fetchPrices: false uses only what the store has. */
-async function build({ prior = null, fetchPrices = true, log = () => {} } = {}) {
+async function build({ prior = null, council = CO.FIRST, fetchPrices = true, log = () => {} } = {}) {
   const info = councilInfo(prior);
   const want = new Set(['SPY', 'QQQ', ...(info.final?.holdings || []).map((h) => h.ticker)]);
   ledger.events().filter((e) => e.type === 'decision').forEach((e) => Object.keys(e.target).forEach((t) => want.add(t)));
@@ -56,7 +57,7 @@ async function build({ prior = null, fetchPrices = true, log = () => {} } = {}) 
   const entryW = Object.fromEntries((lastFill?.trades || []).map((x) => [x.t, r2(x.to)]));
   const target = ledger.events().filter((e) => e.type === 'decision' && st.fills.some((f) => f.hash === e.hash)).pop()?.target || {};
   const state = {
-    id: 'council', ...META, updatedAt: new Date().toISOString(),
+    id: council.id, name: council.name, awareness: council.awareness || '', color: council.color, updatedAt: new Date().toISOString(),
     capital: st.capital, cash: st.cash, stats: st.stats, verify: st.verify, pending: st.pending, fills: st.fills,
     series: st.series.map((p) => [p.d, r2(p.nav), r2(p.spy), r2(p.qqq)]),
     positions: st.positions.map((p) => ({ ...p, value: r2(p.value), weight: r2(p.weight), pnl: r2(p.pnl), entryWeight: target[p.t] ?? entryW[p.t] ?? null })),
@@ -65,7 +66,7 @@ async function build({ prior = null, fetchPrices = true, log = () => {} } = {}) 
     universe: C.UNIVERSE.map((u) => ({ t: u[0], n: u[1], s: u[2], k: u[3] })), seats: C.SEATS, officers: C.OFFICERS,
     presets: Object.fromEntries(Object.entries(C.PRESETS).map(([k, p]) => [k, { label: p.label, blurb: p.blurb }])), formats: C.FORMATS, rounds: C.ROUNDS,
   };
-  log(`council: ${st.stats ? M.pc(st.stats.ret) : 'no record yet'} · ${st.positions.length} positions · ledger ${st.verify.ok ? 'intact' : 'BROKEN'}`);
+  log(`${council.name}: ${st.stats ? M.pc(st.stats.ret) : 'no record yet'} · ${st.positions.length} positions · ledger ${st.verify.ok ? 'intact' : 'BROKEN'}`);
   return { state, json: stateJson(state), readme: readme(state), chart: chartSvg(state) };
 }
 /* One line per top-level key, so the committed file reads well in a diff. */
@@ -75,8 +76,8 @@ const stateJson = (state) => '{\n' + Object.entries(state).filter(([, v]) => v !
 function readme(s) {
   const pc = (v) => (v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%'), usd = (v) => '$' + Math.round(v).toLocaleString('en-US');
   const st = s.stats, nav = s.series.length ? s.series[s.series.length - 1][1] : s.capital;
-  const L = ['# Oazy Research · the council index', '', 'A paper portfolio held by a council of Claude agents. Each decision enters when it is applied (at that moment\'s prices, or at a chosen 09:30 New York open), and holdings drift with prices until the next meeting. Marked on free daily closes, after 0.1% per trade, against SPY and QQQ bought at the same moment.', '',
-    `Updated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC.`, '', '![The council against SPY and QQQ](chart.svg)', '',
+  const L = [`# ${s.name || 'Council'} · Oazy Research`, '', ...(s.awareness ? ['**Awareness:** ' + s.awareness.replace(/\s*\n\s*/g, ' '), ''] : []), 'A paper portfolio held by a council of Claude agents. Each decision enters when it is applied (at that moment\'s prices, or at a chosen 09:30 New York open), and holdings drift with prices until the next meeting. Marked on free daily closes, after 0.1% per trade, against SPY and QQQ bought at the same moment.', '',
+    `Updated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC.`, '', `![${s.name || 'The council'} against SPY and QQQ](chart.svg)`, '',
     '| Value | Return | vs S&P 500 | vs Nasdaq-100 | Max drawdown | Since |', '|---:|---:|---:|---:|---:|---|',
     `| ${usd(nav)} | ${pc(st?.ret)} | ${st?.spy != null ? pc(st.ret - st.spy) : '—'} | ${st?.qqq != null ? pc(st.ret - st.qqq) : '—'} | ${st?.maxDD ? pc(st.maxDD) : '0.00%'} | ${s.series[0]?.[0]?.slice(0, 10) || 'not started'} |`, ''];
   if (s.final?.summary) L.push(`> ${s.final.summary}`, '');
@@ -84,18 +85,31 @@ function readme(s) {
   for (const p of s.positions) L.push(`| ${p.t} ${s.names.find((u) => u.t === p.t)?.n || ''} | ${p.weight.toFixed(1)}% | ${p.entryWeight != null ? p.entryWeight.toFixed(1) + '%' : '—'} | ${pc(p.pnlPct)} |`);
   L.push(`| Cash | ${(s.cash ?? s.final?.cash_pct ?? 0).toFixed(1)}% | | |`);
   for (const p of s.pending || []) L.push('', p.mode === 'now' ? `A decision applied at ${p.at} enters once its prices are in.` : `A decision from ${p.at.slice(0, 10)} enters at the open on ${p.on}.`);
-  L.push('', 'The [ledger](council/ledger.jsonl) hashes each entry with the one before it, so nothing can be changed after the fact. Meetings are in [council/sessions](council/sessions).', '');
+  L.push('', 'The [ledger](ledger.jsonl) hashes each entry with the one before it, so nothing can be changed after the fact. Meetings are in [sessions](sessions).', '', '[All councils](../README.md)', '');
+  return L.join('\n');
+}
+
+/* The page GitHub shows for index/: every council side by side. entries: [{ council, state }] (state may be null). */
+function rootReadme(entries) {
+  const pc = (v) => (v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%');
+  const L = ['# Oazy Research · the councils', '', 'Paper portfolios, each held by its own council of Claude agents. Every council runs the same meeting; what sets one apart is its Awareness, the outlook it was founded on.', '',
+    `Updated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC.`, '', '![The councils against SPY and QQQ](chart.svg)', '',
+    '| Council | Return | vs S&P 500 | Holdings | Since |', '|---|---:|---:|---:|---|'];
+  for (const { council: c, state: s } of entries) {
+    const st = s?.stats;
+    L.push(`| [${c.name}](${c.id}/README.md) | ${pc(st?.ret)} | ${st?.spy != null ? pc(st.ret - st.spy) : '—'} | ${s?.positions?.length || 0} | ${s?.series?.[0]?.[0]?.slice(0, 10) || 'not started'} |`);
+  }
+  L.push('');
   return L.join('\n');
 }
 
 function chartSvg(state) {
-  const states = [state];
+  const states = (Array.isArray(state) ? state : [state]).filter(Boolean);
   const W = 880, H = 300, padL = 16, padR = 120, padT = 18, padB = 28, lines = [];
   const pick = (s, i) => s.series.filter((p) => p[i] != null).map((p) => [Date.parse(p[0].length > 10 ? p[0] : p[0] + 'T21:00:00Z'), (p[i] / s.capital - 1) * 100]);
   const longest = states.slice().sort((a, b) => b.series.length - a.series.length)[0];
   if (longest?.series.length) { lines.push({ n: 'S&P 500', c: '#ffb547', p: pick(longest, 2), w: 1.4 }, { n: 'Nasdaq-100', c: '#a99bff', p: pick(longest, 3), w: 1.4 }); }
-  const COL = { council: '#ffd76a' };
-  for (const s of states) if (s.series.length) lines.push({ n: s.name, c: COL[s.id], p: pick(s, 1), w: 2.4 });
+  for (const s of states) if (s.series.length) lines.push({ n: s.name, c: s.color || '#ffd76a', p: pick(s, 1), w: 2.4 });
   const pts = lines.flatMap((l) => l.p);
   const bg = `<rect width="${W}" height="${H}" rx="14" fill="#0b0d16"/>`;
   if (pts.length < 2) return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}">${bg}<text x="${W / 2}" y="${H / 2}" fill="#8a90a8" font-family="sans-serif" font-size="14" text-anchor="middle">The record starts at the first open.</text></svg>\n`;
@@ -114,4 +128,4 @@ function chartSvg(state) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}">${bg}${grid}${body}${lab}<text x="${padL}" y="${H - 9}" fill="#8a90a8" font-family="sans-serif" font-size="11">${d0}</text><text x="${W - padR}" y="${H - 9}" fill="#8a90a8" font-family="sans-serif" font-size="11" text-anchor="end">${d1}</text></svg>\n`;
 }
 
-module.exports = { build, readme, chartSvg, stateJson, councilInfo };
+module.exports = { build, readme, rootReadme, chartSvg, stateJson, councilInfo };
