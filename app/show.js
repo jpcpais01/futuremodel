@@ -12,7 +12,7 @@ const SHOW = (() => {
   const TAU = Math.PI * 2, now = () => performance.now() / 1000;
   const ACT_COLOR = { data: '#33a8ff', analysts: '#2fd6a8', scout: '#ff9f5a', round1: '#a99bff', floor: '#8b7bff', hunt: '#9ad94a', shoes: '#ff8ad8', cross: '#33c3ff', devil: '#ff6b81', duel: '#ffb547', premortem: '#ff5c7a', steelman: '#2fd6a8', closing: '#ffd76a', redteam: '#ff4d6d', rebuttal: '#ff8fa3', risk: '#dfe3f0', chair: '#ffd76a', record: '#ffd76a' };
   const ACT_SUB = {
-    data: `Two years of prices for ${C.UNIVERSE.length} companies, SEC filings, company news, rates, credit and volatility.`,
+    data: `Two years of prices for ${C.UNIVERSE.length} companies and ETFs, SEC filings, company news, rates, credit and volatility.`,
     analysts: 'The research desk writes a dossier on every single name. Nothing is filtered out.',
     scout: 'Scout searches the live web for what moved markets this week and what is coming next.',
     round1: 'Every seat votes in secret. No one sees another ballot until all are in, then they are revealed together.',
@@ -26,7 +26,7 @@ const SHOW = (() => {
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII'];
   const hasLogo = (t) => typeof BRAND === 'object' && t in BRAND;
   const UNI = Object.fromEntries(C.UNIVERSE.map((u) => [u[0], { t: u[0], n: u[1], s: u[2], k: u[3] }]));
-  const SECC = { Technology: '#5b8cff', Semiconductors: '#8b7bff', Communication: '#33bfff', Consumer: '#ff8a5c', Financials: '#3ddc97', 'Health Care': '#ff6aa2', Industrials: '#ffb547', Energy: '#ff7a45', Utilities: '#9ad94a', Materials: '#c9a26b', 'Real Estate': '#b58cff', 'Broad market': '#a9adbd', Bonds: '#6fa8dc', Commodities: '#ffd76a', Crypto: '#f7931a', International: '#2fd6a8' };
+  const SECC = { Technology: '#5b8cff', Semiconductors: '#8b7bff', Communication: '#33bfff', Consumer: '#ff8a5c', Financials: '#3ddc97', 'Health Care': '#ff6aa2', Industrials: '#ffb547', Energy: '#ff7a45', Utilities: '#9ad94a', Materials: '#c9a26b', 'Real Estate': '#b58cff', 'Broad market': '#a9adbd', Bonds: '#6fa8dc', Commodities: '#ffd76a', Crypto: '#f7931a', International: '#2fd6a8', 'Sector ETFs': '#7fd1ff' };
   function mark(t, s = 24) {
     t = String(t || '').toUpperCase();
     if (hasLogo(t)) return `<span class="lg" style="--s:${s}px"><img src="logos/${esc(t)}.webp" alt="" draggable="false"></span>`;
@@ -338,7 +338,7 @@ const SHOW = (() => {
     if (isMember) (d.responses || []).slice(0, 2).forEach((r) => { const to = byName(r.to); extras.push(`<div class="qc${curAct?.format === 'shoes' && to ? ' shoes' : ''}">${AV.orb(to || 'arbiter', 26)}<div><b>${toLbl(r)}</b>, ${esc(r.point)}</div></div>`); if (to && to !== k) hall.beam(k, to, 9000); });
     if (b.kind === 'redteam') (d.attacks || []).slice(0, 4).forEach((a) => extras.push(`<div class="qc atk">${AV.orb('vex', 26)}<div><b>${esc(a.target)}</b> <div class="sev">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= a.severity ? 'on' : ''}"></i>`).join('')}</div>${esc(a.argument)}</div></div>`));
     let chips = '';
-    if (isMember && d.picks) chips = d.picks.slice().sort((p, q) => (pitched.includes(q.ticker) - pitched.includes(p.ticker)) || q.weight - p.weight).slice(0, 10).map((p, i) => tkc(p.ticker, p.weight, pitched.includes(p.ticker) ? 'add stamp pitch' : '', `${pitched.includes(p.ticker) ? 'data-s="PITCH" ' : ''}style="animation-delay:${i * 70}ms"`)).join('');
+    if (isMember && d.picks) chips = d.picks.slice().sort((p, q) => (pitched.includes(q.ticker) - pitched.includes(p.ticker)) || q.weight - p.weight).slice(0, 10).map((p, i) => tkc(p.ticker, p.weight, pitched.includes(p.ticker) ? 'add stamp pitch' : '', `${pitched.includes(p.ticker) ? 'data-s="PITCH" ' : ''}style="animation-delay:${i * 70}ms"`)).join('') + (d.picks.length > 10 ? `<span class="tkc" title="${esc(d.picks.slice().sort((p, q) => q.weight - p.weight).slice(10).map((p) => `${p.ticker} ${(+p.weight).toFixed(1)}%`).join(', '))}">+${d.picks.length - 10} more</span>` : '');
     if (b.kind === 'redteam') chips = (d.cut || []).map((c, i) => tkc(c.ticker, null, 'cut stamp', `data-s="CUT" style="animation-delay:${i * 90}ms"`)).join('');
     if (b.kind === 'risk') chips = [...(d.vetoes || []).map((v) => tkc(v.ticker, null, 'cut stamp', 'data-s="VETO"')), ...(d.caps || []).map((c) => `<span class="tkc">${mark(c.ticker, 24)}${esc(C.label(c.ticker))}<em>≤ ${(+c.max_weight).toFixed(0)}%</em></span>`), `<span class="tkc"><span class="lg cash" style="--s:24px">$</span>Cash ≥ ${(+d.min_cash_pct || 0).toFixed(0)}%</span>`, `<span class="tkc">Sector ≤ ${(+d.max_sector_pct || 0).toFixed(0)}%</span>`].join('');
     const meta = isMember ? (pitched.length ? `<span>Pitched:</span> ${pitched.map((t) => `<span class="up">${esc(C.label(t))}</span>`).join(' · ')} <span>· nobody held ${pitched.length > 1 ? 'these' : 'it'}</span>` : diffLine(k, d)) : b.kind === 'scout' ? '<span>Briefing shared with every seat</span>' : b.kind === 'chair' && d.confidence != null ? `<span>Confidence ${d.confidence}/100</span>` : '';
@@ -434,15 +434,19 @@ const SHOW = (() => {
   /* Where the council leans: the average of every seat's latest proposal, re-sorted as it changes. */
   function renderBoard() {
     const side = $('#shSide'); if (innerWidth < 900) return;
-    const cons = rules.consensus(props).slice(0, 14), max = Math.max(1, ...cons.map((c) => c.weight));
-    if (!side.querySelector('.cb')) side.innerHTML = '<h5><span>Where the council leans</span><span id="cbN"></span></h5><div class="cb" id="cb"></div>';
+    if (!side.querySelector('.cb')) side.innerHTML = '<h5><span>Where the council leans</span><span id="cbN"></span></h5><div class="cb" id="cb"></div><div class="cbm" id="cbM"></div>';
     side.classList.add('on'); $('#shCap').classList.remove('wide');
-    $('#cbN').textContent = Object.keys(props).length ? `${Object.keys(props).length} seats` : 'waiting';
-    const cb = $('#cb'), seen = new Set();
+    const cb = $('#cb'), seen = new Set(), all = rules.consensus(props);
+    // Every name any seat backs is on the board; rows shrink to fit, and only a long tail is folded into "+N more".
+    const fit = Math.max(8, Math.floor((cb.clientHeight || 520) / 22)), cons = all.slice(0, fit), step = Math.max(22, Math.min(36, Math.floor((cb.clientHeight || 520) / Math.max(1, cons.length))));
+    const max = Math.max(1, ...cons.map((c) => c.weight));
+    $('#cbN').textContent = Object.keys(props).length ? `${all.length} names` : 'waiting';
+    $('#cbM').textContent = all.length > cons.length ? `+${all.length - cons.length} more, smaller weights` : '';
+    cb.style.setProperty('--rh', Math.min(32, step - 4) + 'px');
     cons.forEach((c, i) => {
       let r = cb.querySelector(`[data-t="${CSS.escape(c.ticker)}"]`);
-      if (!r) { r = document.createElement('div'); r.className = 'cbr new'; r.dataset.t = c.ticker; r.innerHTML = `${mark(c.ticker, 24)}<b>${esc(C.label(c.ticker))}</b><span class="bar"><i style="width:0"></i></span><em></em>`; r.style.transform = `translateY(${i * 36 + 40}px)`; cb.appendChild(r); }
-      seen.add(c.ticker); r.style.opacity = 1; r.style.transform = `translateY(${i * 36}px)`;
+      if (!r) { r = document.createElement('div'); r.className = 'cbr new'; r.dataset.t = c.ticker; r.innerHTML = `${mark(c.ticker, 24)}<b>${esc(C.label(c.ticker))}</b><span class="bar"><i style="width:0"></i></span><em></em>`; r.style.transform = `translateY(${i * step + 40}px)`; cb.appendChild(r); }
+      seen.add(c.ticker); r.style.opacity = 1; r.style.transform = `translateY(${i * step}px)`;
       r.querySelector('i').style.width = (c.weight / max * 100).toFixed(1) + '%'; r.querySelector('em').textContent = c.weight.toFixed(1) + '%';
       r.title = `${c.ticker}: backed by ${c.votes} seat${c.votes === 1 ? '' : 's'}`;
     });
