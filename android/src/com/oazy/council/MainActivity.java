@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
 public class MainActivity extends Activity {
   static final String ORIGIN_HOST = "app.oazy.local";
   static final String SEC_UA = "OazyResearch/3.0 (personal research) 158115534+jpcpais01@users.noreply.github.com";
-  static final Pattern DATA_HOSTS = Pattern.compile("(^|\\.)(finance\\.yahoo\\.com|sec\\.gov|news\\.google\\.com|stlouisfed\\.org|cboe\\.com|gdeltproject\\.org)$", Pattern.CASE_INSENSITIVE);
+  static final Pattern DATA_HOSTS = Pattern.compile("(^|\\.)(finance\\.yahoo\\.com|sec\\.gov|news\\.google\\.com|stlouisfed\\.org|cboe\\.com|gdeltproject\\.org|nasdaq\\.com|federalreserve\\.gov)$", Pattern.CASE_INSENSITIVE);
   private WebView web;
   private FrameLayout root;
 

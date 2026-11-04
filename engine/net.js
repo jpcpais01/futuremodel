@@ -4,7 +4,7 @@
 const HOST_GAP = {                       // minimum milliseconds between requests to the same host
   'query1.finance.yahoo.com': 350, 'query2.finance.yahoo.com': 350, 'feeds.finance.yahoo.com': 400,
   'news.google.com': 700, 'www.sec.gov': 160, 'data.sec.gov': 160, 'api.gdeltproject.org': 5500,
-  'fred.stlouisfed.org': 250, 'cdn.cboe.com': 200,
+  'fred.stlouisfed.org': 250, 'cdn.cboe.com': 200, 'api.nasdaq.com': 250,
 };
 const lastHit = new Map();
 const chains = new Map();

@@ -50,11 +50,18 @@ function picksFor(k, D, n = 9) {
     .map(({ u, s }, i) => ({ ticker: u[0], weight: 0, conviction: Math.max(1, 5 - Math.floor(i / 2)), thesis: `${u[1]}: ${M.pc(D.metrics[u[0]].r3m)} over 3 months, score ${s.toFixed(2)} on my lens.`, key_risk: 'The trend breaks below its 50-day average.' }));
 }
 
-function member(k, round, { D }, props) {
+function member(k, round, { D }, props, fmt) {
   const picks = picksFor(k, D, 8 + (k.length % 3)), cash = k === 'harbor' || k === 'anchor' ? 10 : 5;
   const tw = picks.reduce((a, p) => a + p.conviction, 0);
   picks.forEach((p) => { p.weight = +((p.conviction / tw) * (100 - cash)).toFixed(1); });
   const others = Object.keys(props).filter((x) => x !== k);
+  if (fmt === 'hunt') {
+    // the hunt: bring one name nobody holds
+    const held = new Set(Object.values(props).flatMap((p) => (p?.picks || []).map((q) => q.ticker)));
+    const find = picksFor(k, D, 60).find((p) => !held.has(p.ticker) && !picks.some((q) => q.ticker === p.ticker));
+    if (find) { const w = 6; picks.forEach((p) => { p.weight = +(p.weight * (100 - cash - w) / (100 - cash)).toFixed(1); }); picks.push({ ...find, weight: w, conviction: 3 });
+      return { statement: `Nobody here holds ${find.ticker}. ${find.thesis} That is exactly the kind of name a crowded council forgets.`, regime: 'Late-cycle expansion with sticky inflation', risk_appetite: 60, cash_pct: cash, picks, avoid: [], responses: [{ to: 'Council', point: `${find.ticker}: overlooked, and the numbers say it should not be.` }] }; }
+  }
   return {
     statement: round === 1 ? LINES[k] : `I have heard the room. ${others.length ? C.SEATS[others[0]]?.name + ' makes a fair point on concentration, so I trimmed my largest weight.' : ''} My core view stands.`,
     regime: 'Late-cycle expansion with sticky inflation', risk_appetite: { atlas: 60, nova: 80, anchor: 40, pulse: 75, raven: 50, forge: 85, harbor: 30, scout: 60 }[k] || 55,
