@@ -38,7 +38,7 @@ function tidy(items, days, cutoff, max) {
 async function companyNews(universe, { signal, days = 10, max = 10, cutoff = Date.now(), onProgress = () => {}, into = {} } = {}) {
   const rel = 'news/companies.json';
   const c = store.readJSON(rel);
-  if (c && store.age(rel) < 3 * 3600e3 && universe.every(([t]) => c[t])) return Object.assign(into, c);
+  if (c && store.age(rel) < 3 * 3600e3 && universe.every(([t]) => c[t])) { onProgress(universe.length, universe.length); return Object.assign(into, c); }   // read a moment ago: counted as done at once
   const out = into; let done = 0, gMiss = 0;
   await pool(universe, 3, async ([t, name, , kind]) => {
     if (signal?.aborted) return;

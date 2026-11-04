@@ -61,6 +61,9 @@ async function gather({ signal, emit, settings = {} }) {
   health.prices = U.filter((u) => hist[u[0]]?.bars?.length > 25).length;
   health.fundamentals = Object.values(fund.byTicker).filter((x) => x && x.revTTM).length;
   health.news = Object.values(news).filter((n) => n.length).length;
+  // The final tally, so the counters end on what actually arrived (and say so when a source sent nothing).
+  emit({ type: 'progress', key: 'sec', label: 'SEC fundamentals', done: health.fundamentals, total: stocks.length, final: true });
+  emit({ type: 'progress', key: 'news', label: 'Company news', done: health.news, total: U.length, final: true });
   step('macro', 'Macro and rates');
   const [headlines, fred, vol, calendar] = await Promise.all([
     within(60e3, 'Macro headlines', (sg) => newsSrc.macroNews(C.MACRO_FEEDS, { signal: sg, cutoff })).then((x) => x || []),
