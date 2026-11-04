@@ -146,6 +146,12 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name)
       assert.ok(mem.files.size > 100, 'prices kept in memory');
     } finally { llm.setMock(false); delete process.env.OAZY_BUDGET_SCALE; net.setFetch((...a) => fetch(...a)); store.use(fsBackend(tmp)); }
   });
+  await t('index: an empty council writes valid JSON', async () => {
+    const indexer = require('../engine/indexer');
+    store.use(store.memory());
+    const out = await indexer.build({ fetchPrices: false });
+    const st = JSON.parse(out.json); assert.strictEqual(st.cash, 100); assert.strictEqual(st.positions.length, 0);
+  });
   await t('index: built from the ledger and meetings, waiting decisions shown, README and chart', async () => {
     const indexer = require('../engine/indexer');
     store.use(store.memory());

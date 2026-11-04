@@ -86,7 +86,7 @@ const effectAt = (e) => (e.apply === 'now' ? Date.parse(e.pxAt) : e.fill ? Date.
  */
 function replay(hist, file = FILE) {
   const all = events(file), gen = all.find((e) => e.type === 'genesis');
-  const empty = { series: [], positions: [], fills: [], pending: [], stats: null, capital: gen?.capital || LIMITS.startCapital, verify: verify(file) };
+  const empty = { series: [], positions: [], fills: [], pending: [], cash: 100, stats: null, capital: gen?.capital || LIMITS.startCapital, verify: verify(file) };
   if (!gen) return empty;
   const spy = hist('SPY'), qqq = hist('QQQ');
   if (!spy?.bars?.length) return empty;
