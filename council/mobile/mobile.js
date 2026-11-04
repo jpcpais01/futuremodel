@@ -1,4 +1,5 @@
-/* Oazy Council for the phone. The council runs here, on the phone's own key, and shares one account with the PC app. */
+/* Oazy Research for the phone. It only reads: GitHub keeps both paper indexes (Core and Council) current in the futuremodel
+   repository, and this app shows them, with a saved copy for when the phone is offline. */
 'use strict';
 const $ = (s, el = document) => el.querySelector(s), $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -9,69 +10,87 @@ const fw = (w) => (w == null ? '—' : (+w).toFixed(1) + '%');
 const when = (ts) => new Date(ts).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 const LS = { get: (k, d) => { try { const v = localStorage.getItem('oc.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('oc.' + k, JSON.stringify(v)); } catch {} } };
 
-let demo = LS.get('demo', false), preset = null;
-let S = null, P = null, sess = null, screen = 'council', elsewhere = null;
-const SEAT = {}, UNI = {};
+const RAW = 'https://raw.githubusercontent.com/jpcpais01/futuremodel/main/index/';
+let pf = LS.get('pf', 'core');
+let S = null, P = null, sess = null, screen = 'portfolio', fetched = null;
+const demo = false, SEAT = {}, UNI = {}, DATA = {};
 
 function toast(m, err) { const t = $('#toast'); t.textContent = m; t.className = 'on' + (err ? ' err' : ''); clearTimeout(toast.t); toast.t = setTimeout(() => (t.className = ''), 3800); }
 
 if (window.Native) document.documentElement.classList.add('native');
 
-/* The engine: the same council core the PC app runs. */
-const OC = window.OazyCore.create({
-  onEvents: (list) => list.forEach((e) => (e.type === 'log' && !sess ? toast(e.text) : handle(e))),
-  onChanged: (why) => { if (why === 'running') return; refresh(); },
-});
+/* ── Reading the repository ─────────────────────────────────────────── */
+async function getJSON(rel, fresh) {
+  const key = 'idx:' + rel;
+  try {
+    const r = await fetch(RAW + rel + (fresh ? '?t=' + Date.now() : ''), { cache: 'no-store' });
+    if (!r.ok) throw new Error('GitHub answered ' + r.status);
+    const text = await r.text(), data = JSON.parse(text);
+    try { localStorage.setItem(key, text); } catch {}
+    return { data };
+  } catch (e) {
+    try { const t = localStorage.getItem(key); if (t) return { data: JSON.parse(t), cached: true }; } catch {}
+    return { error: e.message };
+  }
+}
+const OC = {
+  portfolio: () => DATA[pf] || null,
+  sessions: () => DATA.council?.sessions || [],
+  session: async (id) => { const k = 'sess:' + id; try { const t = localStorage.getItem(k); if (t) return JSON.parse(t); } catch {} const r = await getJSON('council/sessions/' + id + '.json'); return r.data || null; },
+};
 
 /* ── Boot ────────────────────────────────────────────────────────────── */
 function start() {
-  setMode(demo);
+  setMode(pf, true);
+  for (const k of ['core', 'council']) { try { const t = localStorage.getItem(`idx:${k}/state.json`); if (t) DATA[k] = JSON.parse(t); } catch {} }
+  refresh(); show('portfolio');
+  load(true);
+  setInterval(() => { if (!document.hidden && !sess) load(true); }, 5 * 60e3);
+  $('#d-ver').textContent = 'Oazy Research for Android · reads github.com/jpcpais01/futuremodel';
+}
+async function load(fresh) {
+  const rs = await Promise.all(['core', 'council'].map((k) => getJSON(k + '/state.json', fresh)));
+  rs.forEach((r, i) => { if (r.data) DATA[['core', 'council'][i]] = r.data; });
+  fetched = rs.find((r) => r.error && !r.data) ? 'bad' : rs.some((r) => r.cached) ? 'cached' : 'ok';
+  conn(fetched === 'ok' ? 'ok' : 'bad');
+  if (fetched !== 'ok') toast(rs.find((r) => r.error)?.error ? 'Offline: showing the saved copy.' : 'Showing the saved copy.');
   refresh();
-  if (!S.hasKey) { show('settings'); toast('Paste your Anthropic API key to start.'); }
-  OC.refreshMarks().catch(() => {});
-  syncAndCheck();
-  setInterval(syncAndCheck, 60e3);
 }
 function conn(state) { $('#conn').className = 'conn ' + state; }
 function setup(st) {
-  Object.assign(SEAT, st.seats, st.officers); st.universe.forEach((u) => (UNI[u.t] = u));
-  if (!Ch.ready) Ch.init(st);
+  Object.assign(SEAT, st.seats || {}, st.officers || {}); (st.universe || []).forEach((u) => (UNI[u.t] = u));
+  if (!Ch.ready && st.universe) Ch.init(st);
 }
 function refresh() {
-  S = OC.state(); setup(S);
-  if (!preset) preset = S.settings.preset;
+  for (const k of ['council', 'core']) if (DATA[k]) (DATA[k].names || []).forEach((u) => (UNI[u.t] = { ...UNI[u.t], ...u }));
+  if (DATA.council) { S = DATA.council; setup(S); }
+  P = OC.portfolio();
   renderIdle();
-  if (screen !== 'council' && screen !== 'session') show(screen);
+  if (screen !== 'session') show(screen);
 }
-/* Every minute while open: catch up with the account, see whether the PC is in session, and run the cheap daily watch when it is owed. */
-let checking = false;
-async function syncAndCheck() {
-  if (checking || document.hidden) return; checking = true;
-  try {
-    if (!S.sync.on) { conn('off'); return; }
-    const r = await OC.syncNow(); conn(r.error ? 'bad' : 'ok');
-    const was = elsewhere; elsewhere = OC.isRunning() ? null : await OC.remoteLive().catch(() => null);
-    if (r.changed || was || elsewhere) refresh(); else renderIdle();
-    if (!elsewhere && !OC.isRunning() && S.hasKey && OC.watchDue()) { const w = await OC.watch(false); if (w?.convene) toast('The watch flagged a broken thesis: ' + w.statement, true); refresh(); }
-  } catch { conn('bad'); } finally { checking = false; }
-}
-document.addEventListener('visibilitychange', () => { if (!document.hidden) syncAndCheck(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !sess) load(true); });
 
-function setMode(d) {
-  demo = d; LS.set('demo', d); $('#demo').checked = d;
-  $('#mode').classList.toggle('demo', d); $$('#mode button').forEach((b) => b.classList.toggle('on', (b.dataset.m === 'demo') === d));
+/* Core or Council: which index the screens show. The Council and Sessions tabs only exist for the council. */
+function setMode(k, quiet) {
+  pf = k === 'council' ? 'council' : 'core'; LS.set('pf', pf);
+  $('#mode').classList.toggle('right', pf === 'council'); $$('#mode button').forEach((b) => b.classList.toggle('on', b.dataset.m === pf));
+  document.body.dataset.pf = pf;
+  $$('#tabs button').forEach((b) => b.classList.toggle('hidden', pf === 'core' && (b.dataset.s === 'council' || b.dataset.s === 'sessions')));
+  P = OC.portfolio();
+  if (!quiet) show(pf === 'core' && (screen === 'council' || screen === 'sessions' || screen === 'session') ? 'portfolio' : screen);
 }
-$$('#mode button').forEach((b) => (b.onclick = () => { const d = b.dataset.m === 'demo'; if (d === demo) return; setMode(d); renderIdle(); if (screen !== 'council') show(screen); }));
+$$('#mode button').forEach((b) => (b.onclick = () => { if (b.dataset.m === pf) return; setMode(b.dataset.m); }));
 $$('#tabs button').forEach((b) => (b.onclick = () => show(b.dataset.s)));
-const TABS = ['council', 'portfolio', 'record', 'sessions', 'settings'];
+const TABS = ['portfolio', 'record', 'council', 'sessions', 'settings'];
 function show(s) {
   const same = s === screen; screen = s; if (!same) window.scrollTo(0, 0);
   document.body.dataset.screen = s;
   const tab = s === 'session' ? 'sessions' : s;
   $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.s === tab));
-  $('.tab-glow').style.transform = `translateX(${TABS.indexOf(tab) * 100}%)`;
+  const vis = TABS.filter((t) => !$(`#tabs button[data-s="${t}"]`).classList.contains('hidden'));
+  $('.tab-glow').style.width = `calc((100% - 12px) / ${vis.length})`; $('.tab-glow').style.transform = `translateX(${Math.max(0, vis.indexOf(tab)) * 100}%)`;
   $$('.screen').forEach((x) => x.classList.toggle('on', x.id === 's-' + s));
-  if (s === 'portfolio') renderPortfolio(); if (s === 'record') renderRecord(); if (s === 'sessions') renderSessions(); if (s === 'settings') renderSettings();
+  if (s === 'portfolio') renderPortfolio(); if (s === 'record') renderRecord(); if (s === 'sessions') renderSessions(); if (s === 'council') renderIdle();
 }
 /* A steady colour for each sector, used by the lettered fund badges. */
 const hueOf = (t) => { const sec = UNI[t]?.s || t; let h = 0; for (const c of sec) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
@@ -103,55 +122,25 @@ function headline(eyebrow, title, sub) {
   const set = (sel, v) => { const el = $(sel); if (v == null || el.textContent === v) return; el.textContent = v; el.classList.remove('swap'); void el.offsetWidth; el.classList.add('swap'); };
   set('#l-step', eyebrow); set('#c-phase', title); set('#c-sub', sub);
 }
+/* The council meets on GitHub every Monday at 12:00 UTC, before the US open. */
+function nextMeeting(from = Date.now()) { const d = new Date(from); d.setUTCHours(12, 0, 0, 0); d.setUTCDate(d.getUTCDate() + ((1 - d.getUTCDay() + 7) % 7)); if (d.getTime() <= from) d.setUTCDate(d.getUTCDate() + 7); return d.getTime(); }
 function renderIdle() {
-  if (!S) return;
-  const live = !!sess && !sess.ended;
-  $('#live').classList.toggle('hidden', !sess); $('#idle').classList.toggle('hidden', live);
-  $('#next').textContent = S.next?.session ? 'Next weekly session ' + when(S.next.session) : '';
-  $('#conv').classList.toggle('hidden', !!S.running || (!!elsewhere && !demo));
-  const due = !demo && S.due && S.hasKey && !elsewhere && !S.running;
-  $('#due').classList.toggle('hidden', !due);
-  renderPresets();
-  const noKey = !demo && !S.hasKey;
-  $('#go').disabled = false; $('#go').textContent = noKey ? 'Add API key' : 'Convene';
-  $('#go').onclick = noKey ? () => show('settings') : () => convene(preset, demo);
+  const C = DATA.council; if (!C) return;
+  $('#live').classList.toggle('hidden', !sess); $('#idle').classList.toggle('hidden', !!sess && !sess.ended);
+  $('#next').textContent = 'Next meeting ' + when(nextMeeting()) + ', on GitHub';
   if (sess) return;
   $('#track').classList.add('hidden'); $('#l-cost').textContent = '';
-  P = OC.portfolio(demo);
-  const f = P?.final;
-  if (elsewhere && !demo) headline('Live on ' + elsewhere.device, elsewhere.phase?.label || 'In session', elsewhere.last?.text ? elsewhere.last.text.slice(0, 110) + '…' : 'The council is meeting on the other device.');
-  else if (f) headline(`${demo ? 'Demo · ' : ''}The council · adjourned`, `Holding ${f.holdings.length} names`, `${fw(f.cash_pct)} cash · decided ${when(P.decidedAt)}`);
-  else headline(demo ? 'Demo · the council' : 'The council', S.running ? 'In session' : 'Not yet convened', `${S.universe.length} names on the ring. Convene the council to build the first portfolio.`);
-  $('#last').innerHTML = f ? `<div class="l-top"><span class="eyebrow">${demo ? 'Demo · ' : ''}${when(P.decidedAt)}</span><span class="grow"></span>${P.decidedOn ? `<span class="tag">${esc(P.decidedOn)}</span>` : ''}</div>
+  const f = C.final;
+  if (f) headline('The council · adjourned', `Holding ${f.holdings.length} names`, `${fw(f.cash_pct)} cash · decided ${when(C.decidedAt)}`);
+  else headline('The council', 'Not yet convened', `${C.universe.length} names on the ring. It meets every Monday before the US open.`);
+  $('#last').innerHTML = f ? `<div class="l-top"><span class="eyebrow">${when(C.decidedAt)}</span><span class="grow"></span>${C.decidedOn ? `<span class="tag">${esc(C.decidedOn)}</span>` : ''}</div>
     <h3>${f.holdings.length} holdings · ${fw(f.cash_pct)} cash</h3><p>${esc(f.summary)}</p>
     <div class="chips">${f.holdings.slice().sort((a, b) => b.weight - a.weight).map((h) => chip(h.ticker, h.weight)).join('')}</div>`
-    : `<span class="eyebrow">No decision yet</span><h3>The council has not met${demo ? ' in demo mode' : ''}</h3><p>Pick a budget above and convene it. ${demo ? 'Demo runs are free.' : `It reads all ${S.universe.length} names, debates, and decides what to hold.`}</p>`;
+    : `<span class="eyebrow">No decision yet</span><h3>The council has not met</h3><p>It reads all ${C.universe.length} names, debates, and decides what to hold.</p>`;
   $('#last').onclick = f ? () => show('portfolio') : null;
-  if (f) Ch.final(f.holdings, false); else Ch.reset();
+  if (Ch.ready) { if (f) Ch.final(f.holdings, false); else Ch.reset(); }
 }
-$('#demo').onchange = (e) => { setMode(e.target.checked); renderIdle(); };
-function convene(p, d) {
-  $('#go').disabled = true; $('#due-go').disabled = true;
-  OC.run(p, d).catch((e) => { toast(e.message, true); if (sess && !sess.ended) { sess = null; Ch.reset(); } }).finally(() => { $('#due-go').disabled = false; refresh(); });
-}
-$('#due-go').onclick = () => convene(S.settings.preset, false);
-$('#l-cancel').onclick = () => { OC.cancel(); $('#l-cancel').disabled = true; toast('Adjourning after the current call.'); };
-
-/* Budgets: three cards with a signal-strength mark, and the seats that would sit. */
-const TINT = { low: '#4f8dff', normal: '#a874ff', high: '#ffab4a' };
-const seatsOf = (p) => [...new Set([...p.members, ...(p.scout ? ['scout'] : []), ...(p.redTeam ? ['vex'] : []), 'sentinel', 'arbiter'])];
-function renderPresets() {
-  const box = $('#presets');
-  if (box.dataset.demo !== String(demo) || !box.children.length) {
-    box.dataset.demo = String(demo);
-    box.innerHTML = ['low', 'normal', 'high'].map((k, i) => { const p = S.presets[k];
-      return `<button class="bud" data-k="${k}" style="--c:${TINT[k]}"><span class="pips">${[0, 1, 2].map((j) => `<i class="${j <= i ? 'on' : ''}"></i>`).join('')}</span><b>${esc(p.label)}</b><small>${demo ? 'Free demo' : '~' + money(p.est.mid)}</small></button>`; }).join('');
-    $$('#presets .bud').forEach((b) => (b.onclick = () => { preset = b.dataset.k; renderPresets(); }));
-  }
-  $$('#presets .bud').forEach((b) => b.classList.toggle('on', b.dataset.k === preset));
-  const p = S.presets[preset], steps = [p.rounds ? `${p.rounds} debate round${p.rounds > 1 ? 's' : ''}` : 'no debate round', p.redTeam && 'a red team', p.rebuttal && 'rebuttals', p.scout && 'a web scout'].filter(Boolean);
-  $('#preset-info').innerHTML = `<span class="stack">${seatsOf(p).map((k) => orb(k, 26)).join('')}</span><p><b>${p.members.length} seats on ${esc(p.models.member)}</b>, ${steps.join(', ')}. About ${p.est.calls} calls${demo ? '' : `, ${money(p.est.low)} to ${money(p.est.high)}`}.</p>`;
-}
+$('#l-cancel').onclick = () => { sess = null; Ch.reset(); renderIdle(); };
 
 /* ── A live session ── */
 const roundLabel = (e) => ({ redteam: 'Red team', risk: 'Risk review', chair: 'Decision', scout: 'Briefing' }[e.kind] || (e.round === 1 ? 'Round 1' : e.round === 9 ? 'Rebuttal' : 'Debate ' + (e.round - 1)));
@@ -169,7 +158,7 @@ const STEP = {
 function handle(e) {
   if (e.type === 'start') {
     const i = e.session;
-    sess = { info: i, seats: {}, focus: null, pin: null, cost: 0, est: i.demo ? 0 : S.presets[i.preset]?.est.mid, props: {}, cut: {}, veto: {}, reports: 0, step: -1, final: null };
+    sess = { info: i, seats: {}, focus: null, pin: null, cost: 0, est: 0, props: {}, cut: {}, veto: {}, reports: 0, step: -1, final: null };
     const keys = [...new Set([...i.members, ...(i.phases.some((p) => p.key === 'scout') ? ['scout'] : [])])];
     $('#seats').innerHTML = [...keys.map(seatEl), '<i class="seat-div"></i>', ...i.officers.map(seatEl)].join('');
     $$('#seats .seat').forEach((b) => (b.onclick = () => { sess.pin = sess.pin === b.dataset.k ? null : b.dataset.k; focus(b.dataset.k, true); }));
@@ -229,8 +218,7 @@ function handle(e) {
       Object.keys(sess.seats).forEach((k) => { if (sess.seats[k].state !== 'done') { sess.seats[k].state = 'done'; seatState(k); } });
       focus('arbiter'); leans();
       break;
-    case 'done': sess.ended = true; $('#l-cancel').classList.add('hidden'); toast(sess.info.demo ? 'Demo session recorded.' : `Session recorded. It cost ${money(e.cost)}.`); setTimeout(() => { sess = null; refresh(); }, 9000); break;
-    case 'failed': toast(e.error === 'Cancelled' ? 'Session adjourned.' : 'Session failed: ' + e.error, e.error !== 'Cancelled'); sess = null; Ch.reset(); refresh(); break;
+
   }
 }
 function track(n, cur) { $('#track').innerHTML = Array.from({ length: n }, (_, j) => `<i class="${j < cur ? 'done' : j === cur ? 'now' : ''}"></i>`).join(''); }
@@ -304,39 +292,36 @@ function record(e, text, d) {
 /* ── Portfolio ───────────────────────────────────────────────────────── */
 const kpi = (a, b, c) => `<div class="glass kpi"><div class="eyebrow">${a}</div><span class="num">${b}</span><small>${c}</small></div>`;
 function renderPortfolio() {
-  P = OC.portfolio(demo);
+  P = OC.portfolio();
+  if (!P) { $('#pf-asof').textContent = 'Loading from GitHub'; $('#pf-value').innerHTML = ''; $('#pf-change').textContent = fetched === 'bad' ? 'Could not reach GitHub. It tries again in a few minutes.' : ''; $('#pf-list').innerHTML = ''; $('#pf-kpis').innerHTML = ''; return; }
   const f = P.final, st = P.stats, nav = P.series.length ? P.series[P.series.length - 1][1] : P.capital;
-  $('#pf-asof').textContent = f ? `${demo ? 'Demo · ' : ''}Paper value · decided ${when(P.decidedAt)}` : demo ? 'Demo record' : 'Paper value';
+  $('#pf-asof').textContent = `${P.name} · paper index` + (P.updatedAt ? ' · updated ' + when(P.updatedAt) : '');
   const [whole, cents] = money(nav, 2).split('.');
   $('#pf-value').innerHTML = `${whole}<small>.${cents}</small>`;
-  $('#pf-change').innerHTML = st ? `<b class="${cls(st.ret)}">${pc(st.ret)}</b> since the first decision` : 'Starting capital, entered at the open of the decision day';
-  ['#pf-sumcard', '#pf-watch', '#pf-watchwrap'].forEach((x) => $(x).classList.toggle('hidden', !f));
-  if (!f) { $('#pf-kpis').innerHTML = ''; $('#pf-list').innerHTML = '<div class="fine">No decision yet. Convene the council to build the first portfolio.</div>'; $('#pf-count').textContent = ''; $('#pf-note').classList.add('hidden'); return; }
+  $('#pf-change').innerHTML = st ? `<b class="${cls(st.ret)}">${pc(st.ret)}</b> since the open of ${new Date(String(P.series[0][0]).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'Starting capital, bought at the open of the decision day';
+  $('#pf-sumcard').classList.toggle('hidden', !f?.summary);
+  if (!f) { $('#pf-kpis').innerHTML = ''; $('#pf-list').innerHTML = '<div class="fine">Nothing held yet.</div>'; $('#pf-count').textContent = ''; $('#pf-note').classList.add('hidden'); return; }
   $('#pf-kpis').innerHTML = kpi('vs Nasdaq 100', st?.qqq != null ? `<span class="${cls(st.ret - st.qqq)}">${pc(st.ret - st.qqq)}</span>` : '—', st?.qqq != null ? `QQQ ${pc(st.qqq)}` : 'once filled')
     + kpi('vs S&P 500', st?.spy != null ? `<span class="${cls(st.ret - st.spy)}">${pc(st.ret - st.spy)}</span>` : '—', st?.spy != null ? `SPY ${pc(st.spy)}` : 'once filled')
-    + kpi('Confidence', `${f.confidence ?? '—'}<small style="display:inline;font-size:13px">/100</small>`, 'from the chair')
-    + kpi('Cash', fw(f.cash_pct), `${f.holdings.length} holdings`);
-  $('#pf-note').classList.toggle('hidden', !P.pending?.length); $('#pf-note').textContent = 'The latest decision enters at its trading day\'s open (9:30 ET) as soon as those prices load.';
+    + (pf === 'council' ? kpi('Confidence', `${f.confidence ?? '—'}<small style="display:inline;font-size:13px">/100</small>`, 'from the chair') : kpi('Max drawdown', st?.maxDD ? pc(st.maxDD) : '0.0%', 'worst fall from a peak'))
+    + kpi('Cash', fw(P.positions?.length ? P.cash : f.cash_pct), `${f.holdings.length} holdings`);
+  $('#pf-note').classList.toggle('hidden', !P.pending?.length); $('#pf-note').textContent = 'The latest decision is bought at its day\'s 9:30 New York open once GitHub has that day\'s prices.';
   $('#pf-sum').textContent = f.summary;
   $('#pf-count').textContent = `${f.holdings.length} names`;
   const pos = Object.fromEntries((P.positions || []).map((p) => [p.t, p])), max = Math.max(...f.holdings.map((h) => h.weight));
   $('#pf-list').innerHTML = f.holdings.slice().sort((a, b) => b.weight - a.weight).map((h) => { const p = pos[h.ticker];
     return `<div class="hold" style="--h:${hueOf(h.ticker)}"><div class="hold-top">${av(h.ticker, 'lg')}
-        <div class="hold-name"><b>${esc(h.ticker)}${P.hl?.[h.ticker] ? '<span class="hl">HL</span>' : ''}</b><span>${esc(UNI[h.ticker]?.n || '')}</span></div>
-        <div class="hold-w"><b>${fw(h.weight)}</b>${p ? `<span class="${cls(p.pnlPct)}">${pc(p.pnlPct)}</span>` : '<span>pending</span>'}</div></div>
+        <div class="hold-name"><b>${esc(h.ticker)}</b><span>${esc(UNI[h.ticker]?.n || '')}</span></div>
+        <div class="hold-w"><b>${fw(p ? p.weight : h.weight)}</b>${p ? `<span class="${cls(p.pnlPct)}">${pc(p.pnlPct)}</span>` : '<span>pending</span>'}</div></div>
       <div class="wbar"><i style="width:${(h.weight / max) * 100}%"></i></div>
-      <div class="why"><div><span class="stars">${'★'.repeat(h.conviction || 0)}<s>${'★'.repeat(5 - (h.conviction || 0))}</s></span><br>${esc(h.thesis)}<em><b>Sell if</b> ${esc(h.rotate_if)}</em><em>Backed by ${esc((h.champions || []).join(', ') || '—')}</em></div></div></div>`; }).join('');
+      <div class="why"><div><span class="stars">${'★'.repeat(h.conviction || 0)}<s>${'★'.repeat(5 - (h.conviction || 0))}</s></span><br>${esc(h.thesis)}<em><b>Sell if</b> ${esc(h.rotate_if)}</em><em>${fw(h.weight)} at entry${p ? ` · ${fw(p.weight)} now` : ''}${h.champions?.length ? ` · backed by ${esc(h.champions.join(', '))}` : h.role ? ` · ${esc(h.role)} sleeve` : ''}</em></div></div></div>`; }).join('');
   $$('#pf-list .hold').forEach((el) => (el.onclick = () => el.classList.toggle('open')));
-  $('#pf-watch').classList.toggle('hidden', !demo && !S.hasKey);
-  const wl = (P.watch || []).slice(0, 6);
-  $('#pf-watchwrap').classList.toggle('hidden', !wl.length);
-  $('#pf-watchlog').innerHTML = wl.map((w) => `<div class="wl"><small>${when(w.at)}${w.convene ? ' · called for a session' : ''}</small>${esc(w.statement)}</div>`).join('');
 }
-$('#pf-watch').onclick = async () => { $('#pf-watch').disabled = true; $('#pf-watch').textContent = 'Watching…'; try { const r = await OC.watch(demo); if (r.error) throw new Error(r.error); toast(r.statement || 'Watch complete'); renderPortfolio(); } catch (e) { toast(e.message, true); } finally { $('#pf-watch').disabled = false; $('#pf-watch').textContent = 'Run the watch now'; } };
 
 /* ── Record ──────────────────────────────────────────────────────────── */
 function renderRecord() {
-  P = OC.portfolio(demo); P.verify = OC.verify(demo);
+  P = OC.portfolio(); if (!P) return;
+  $('#rc-name').textContent = pf === 'council' ? 'Council' : 'Core';
   const st = P.stats, ser = P.series, has = st && ser.length > 1;
   $('#rc-value').innerHTML = has ? `<span class="${cls(st.ret)}">${pc(st.ret)}</span>` : '<span style="color:var(--tx3)">—</span>';
   $('#rc-sub').innerHTML = has ? `over ${st.days} trading days · <b class="${cls(st.ret - st.qqq)}">${pc(st.ret - st.qqq)}</b> vs QQQ` : 'Starts at the open of the first decision day';
@@ -347,7 +332,7 @@ function renderRecord() {
 function chart(ser, cap) {
   const cv = $('#chart'), ctx = cv.getContext('2d'), dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
   cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
-  if (ser.length < 2) { ctx.fillStyle = 'rgba(220,228,255,.4)'; ctx.font = '13px Inter'; ctx.textAlign = 'center'; ctx.fillText('The line starts after the first fill.', W / 2, H / 2); return; }
+  if (ser.length < 2) { ctx.fillStyle = 'rgba(220,228,255,.4)'; ctx.font = '13px Inter'; ctx.textAlign = 'center'; ctx.fillText('The line starts at the first open.', W / 2, H / 2); return; }
   const L = 6, R = 40, T = 10, B = 20, v = ser.flatMap((p) => [p[1], p[2], p[3]]).filter((x) => x != null).map((x) => x / cap - 1);
   let lo = Math.min(0, ...v), hi = Math.max(0, ...v); const pad = (hi - lo) * 0.12 || 0.01; lo -= pad; hi += pad;
   const X = (i) => L + (i / (ser.length - 1)) * (W - L - R), Y = (x) => T + (1 - (x - lo) / (hi - lo)) * (H - T - B);
@@ -366,20 +351,20 @@ function chart(ser, cap) {
 /* ── Sessions ────────────────────────────────────────────────────────── */
 const chevron = '<svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>';
 function renderSessions() {
-  const list = OC.sessions(demo);
+  const list = OC.sessions();
   $('#ss-list').innerHTML = list.map((s) => { const d = new Date(s.startedAt);
     return `<div class="ss" data-id="${esc(s.id)}"><div class="ss-ic">${d.getDate()}<small>${d.toLocaleString('en', { month: 'short' }).toUpperCase()}</small></div>
-      <div class="ss-body"><div class="ss-t"><b>${s.status === 'done' ? esc(S.presets[s.preset]?.label || s.preset) + ' session' : 'Session ' + esc(s.status)}</b>${s.demo ? '<span class="tag demo">demo</span>' : ''}${s.status !== 'done' ? `<span class="tag ${s.status}">${esc(s.status)}</span>` : ''}</div>
+      <div class="ss-body"><div class="ss-t"><b>${s.status === 'done' ? esc(S?.presets?.[s.preset]?.label || s.preset) + ' session' : 'Session ' + esc(s.status)}</b>${s.demo ? '<span class="tag demo">demo</span>' : ''}${s.status !== 'done' ? `<span class="tag ${s.status}">${esc(s.status)}</span>` : ''}</div>
       <p>${s.status === 'done' ? `${s.holdings} holdings · confidence ${s.confidence} · ${money(s.cost)}${s.device ? ' · ' + esc(s.device) : ''}` : esc(s.error || '')}</p></div>${chevron}</div>`; }).join('')
-    || `<div class="fine">No ${demo ? 'demo ' : ''}sessions yet.</div>`;
+    || '<div class="fine">No meetings yet.</div>';
   $$('#ss-list .ss').forEach((el) => (el.onclick = () => detail(el.dataset.id)));
 }
-function detail(id) {
-  show('session');
-  const s = OC.session(id);
+async function detail(id) {
+  show('session'); $('#ss-detail').innerHTML = '<p class="fine">Loading…</p>';
+  const s = await OC.session(id);
   if (!s) return ($('#ss-detail').innerHTML = '<p class="fine">Could not load it.</p>');
   const blk = (k, d, extra = '') => { const m = SEAT[k] || { name: k, role: '', color: '#999' }; return `<div class="glass tr" style="--c:${m.color}"><div class="m"><b style="color:${m.color}">${esc(m.name)}</b> · ${esc(m.role)}</div><p>${esc(d.statement || '')}</p>${extra}${d.picks ? `<div class="chips">${d.picks.slice().sort((a, b) => b.weight - a.weight).map((p) => chip(p.ticker, p.weight)).join('')}</div>` : ''}</div>`; };
-  let h = `<div class="hero" style="padding-top:0"><div class="eyebrow">${esc(S.presets[s.preset]?.label || s.preset)}${s.demo ? ' · demo' : ''} · ${money(s.cost)}${s.device ? ' · ' + esc(s.device) : ''}</div><h1 style="font-size:30px">${when(s.startedAt)}</h1></div>`;
+  let h = `<div class="hero" style="padding-top:0"><div class="eyebrow">${esc(S?.presets?.[s.preset]?.label || s.preset)}${s.demo ? ' · demo' : ''} · ${money(s.cost)}${s.device ? ' · ' + esc(s.device) : ''}</div><h1 style="font-size:30px">${when(s.startedAt)}</h1></div>`;
   if (s.error) h += `<div class="note" style="border-color:rgba(255,112,136,.4);background:rgba(255,112,136,.1);color:#ffc6cf">${esc(s.error)}</div>`;
   if (s.final) h += '<div class="tr-r">Decision</div>' + blk('arbiter', s.final, `<p style="color:var(--tx)">${esc(s.final.summary)}</p><ul>${s.final.holdings.map((x) => `<li><b>${esc(x.ticker)} ${fw(x.weight)}</b>: ${esc(x.thesis)}</li>`).join('')}</ul>`);
   if (s.risk) h += '<div class="tr-r">Risk review</div>' + blk('sentinel', s.risk);
@@ -539,43 +524,7 @@ const Ch = (() => {
   };
 })();
 
-/* ── Settings ────────────────────────────────────────────────────────── */
-function renderSettings() {
-  S = OC.state(); const st = S.settings, y = S.sync || {};
-  $('#k-state').innerHTML = S.hasKey ? '<span class="pill ok">Saved on this phone</span>' : '<span class="pill bad">Not set</span>';
-  $('#k-in').placeholder = S.hasKey ? 'Saved. Paste a new key to replace it' : 'sk-ant-...';
-  $('#k-clear').classList.toggle('hidden', !S.hasKey);
-  if (document.activeElement !== $('#y-repo')) $('#y-repo').value = st.syncRepo || '';
-  if (document.activeElement !== $('#y-dev')) $('#y-dev').value = st.device || '';
-  $('#y-tok').placeholder = S.hasToken ? 'Saved. Paste to replace' : 'github_pat_...';
-  $('#y-state').innerHTML = !y.on ? '<span class="pill">Off</span>' : y.error ? '<span class="pill bad">Error</span>' : '<span class="pill ok">Connected</span>';
-  $('#y-info').innerHTML = !y.on ? 'Not connected.' : y.error ? `<span class="down">${esc(y.error)}</span>` : `Last synced ${y.last ? when(y.last) : 'never'} as ${esc(y.device)}.`;
-  $('#d-preset').innerHTML = ['low', 'normal', 'high'].map((k) => `<button data-k="${k}" class="${st.preset === k ? 'on' : ''}">${S.presets[k].label}<small>~${money(S.presets[k].est.mid)}</small></button>`).join('');
-  $$('#d-preset button').forEach((b) => (b.onclick = () => saveS({ preset: b.dataset.k })));
-  if (document.activeElement !== $('#d-sec')) $('#d-sec').value = st.secContact || '';
-  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  $('#d-sched').textContent = st.schedule.enabled ? `Weekly session ${DAYS[st.schedule.day]} ${String(st.schedule.hour).padStart(2, '0')}:${String(st.schedule.minute).padStart(2, '0')}, run by whichever device is on. Change it on the PC.` : 'The weekly session is off. Turn it on in the PC app.';
-  $('#d-spent').textContent = money(S.spentThisMonth);
-  $('#d-ver').textContent = `Oazy Council ${S.version} for Android`;
-}
-function saveS(patch) { OC.setSettings(patch); if (patch.preset) preset = patch.preset; renderSettings(); renderIdle(); toast('Saved'); }
-$('#k-save').onclick = () => {
-  const v = $('#k-in').value.trim(); if (!v) return toast('Paste the key first.', true);
-  if (!/^sk-ant-/.test(v)) return toast('That does not look like an Anthropic API key (sk-ant-…).', true);
-  OC.setSecret('anthropicKey', v); $('#k-in').value = ''; refresh(); renderSettings(); toast('Key saved, encrypted on this phone.');
-};
-$('#k-clear').onclick = () => { OC.setSecret('anthropicKey', ''); refresh(); renderSettings(); toast('Key removed from this phone.'); };
-$('#y-repo').onchange = (e) => { saveS({ syncRepo: e.target.value.trim() }); syncNowUI(); };
-$('#y-dev').onchange = (e) => saveS({ device: e.target.value.trim().slice(0, 40) });
-$('#y-save').onclick = () => { const v = $('#y-tok').value.trim(); if (!v) return toast('Paste the token first.', true); OC.setSecret('syncToken', v); $('#y-tok').value = ''; renderSettings(); syncNowUI(); };
-$('#y-now').onclick = () => syncNowUI();
-$('#d-sec').onchange = (e) => saveS({ secContact: e.target.value.trim().slice(0, 120) });
 $$('[data-url]').forEach((a) => (a.onclick = (e) => { e.preventDefault(); window.Native?.openUrl ? window.Native.openUrl(a.dataset.url) : window.open(a.dataset.url); }));
-async function syncNowUI() {
-  $('#y-info').textContent = 'Syncing…';
-  const r = await OC.syncNow(); refresh(); renderSettings();
-  toast(r.off ? 'Fill in the repository and token first.' : r.error ? 'Sync failed: ' + r.error : 'Synced', !!r.error);
-}
 
 /* ── Ambient waves: slow flowing lines of light behind everything, in the current screen's colour ── */
 (() => {
@@ -606,7 +555,7 @@ async function syncNowUI() {
 /* Android back button: step back inside the app, or tell the shell to leave. */
 window.ocBack = () => {
   if (screen === 'session') { show('sessions'); return true; }
-  if (screen !== 'council') { show('council'); return true; }
+  if (screen !== 'portfolio') { show('portfolio'); return true; }
   return false;
 };
 start();

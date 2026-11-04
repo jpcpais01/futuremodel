@@ -30,10 +30,9 @@ function macroBrief({ asOf, fred, vol, context, metrics, headlines }) {
   return L.join('\n');
 }
 
-function analystPacket(batch, { metrics, news, filings, hl }) {
+function analystPacket(batch, { metrics, news, filings }) {
   return batch.map((t) => {
     const m = metrics[t], L = [`### ${t}`, m ? M.line(m, META[t]) : `${t}: no data.`];
-    if (hl[t]) L.push(`Tradable as a Hyperliquid perp (${hl[t]}).`);
     const f = filings[t] || [];
     if (f.length) L.push('Recent SEC filings: ' + f.map((x) => `${x.date} ${x.form}${x.what ? ' (' + x.what + ')' : ''}`).join('; '));
     const n = news[t] || [];
@@ -57,10 +56,10 @@ function portfolioSection(state) {
   return L.join('\n');
 }
 
-function marketBook({ asOf, macro, scout, portfolio, metrics, reports, news, filings, hl }) {
+function marketBook({ asOf, macro, scout, portfolio, metrics, reports, news, filings }) {
   const L = [`# Market book, ${new Date(asOf).toISOString().slice(0, 16).replace('T', ' ')} UTC`, '', macro, ''];
   if (scout) L.push('## Scout briefing (live web research)', scout, '');
-  L.push(portfolio, '', '## The universe', `${UNIVERSE.length} names, grouped by sector. Each has measured numbers, the analyst's dossier, the two newest headlines and recent filings. HL marks names tradable as Hyperliquid perps.`, '');
+  L.push(portfolio, '', '## The universe', `${UNIVERSE.length} names, grouped by sector. Each has measured numbers, the analyst's dossier, the two newest headlines and recent filings.`, '');
   const sectors = [...new Set(UNIVERSE.map((u) => u[2]))];
   for (const s of sectors) {
     L.push(`### ${s}`);
@@ -77,7 +76,6 @@ function marketBook({ asOf, macro, scout, portfolio, metrics, reports, news, fil
       if (n.length) parts.push('Latest: ' + n.map((h) => `${h.title} (${dstr(h.t)})`).join(' / '));
       const f = (filings[t] || []).slice(0, 2);
       if (f.length) parts.push('Filed: ' + f.map((x) => `${x.date} ${x.form}${x.what ? ' ' + x.what : ''}`).join('; '));
-      if (hl[t]) parts.push('HL');
       L.push('- ' + parts.join(' | '));
     }
     L.push('');

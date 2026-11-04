@@ -55,11 +55,10 @@ async function gather({ signal, emit, settings = {} }) {
   await within(120e3, 'Company news', (sg) => newsSrc.companyNews(U, { signal: sg, cutoff, into: news, onProgress: (d, n) => emit({ type: 'progress', key: 'news', label: 'Company news', done: d, total: n }) }));
   health.news = Object.values(news).filter((n) => n.length).length;
   step('macro', 'Macro and rates');
-  const [headlines, fred, vol, hl] = await Promise.all([
+  const [headlines, fred, vol] = await Promise.all([
     within(60e3, 'Macro headlines', (sg) => newsSrc.macroNews(C.MACRO_FEEDS, { signal: sg, cutoff })).then((x) => x || []),
     within(60e3, 'FRED rates', (sg) => macroSrc.fred(C.FRED, { signal: sg })).then((x) => x || {}),
     within(30e3, 'Volatility', (sg) => macroSrc.vol({ signal: sg })).then((x) => x || {}),
-    within(30e3, 'Hyperliquid', (sg) => macroSrc.hyperliquid({ signal: sg })).then((x) => x || {}),
   ]);
   health.fred = Object.keys(fred).length; health.headlines = headlines.length;
   emit({ type: 'progress', key: 'macro', label: 'Macro', done: 1, total: 1 });
@@ -68,7 +67,7 @@ async function gather({ signal, emit, settings = {} }) {
   for (const u of U) metrics[u[0]] = M.compute(u[0], hist[u[0]], hist.SPY, fund.byTicker[u[0]]);
   for (const [s] of C.CONTEXT) context[s] = M.compute(s, hist[s], null, null);
   M.percentiles(Object.values(metrics), ['mom12_1', 'r3m']);
-  return { asOf: cutoff, hist, metrics, context, news, filings, headlines, fred, vol, hl, health };
+  return { asOf: cutoff, hist, metrics, context, news, filings, headlines, fred, vol, health };
 }
 
 /* ── Council machinery ────────────────────────────────────────────────────── */
@@ -187,7 +186,7 @@ async function run({ preset = 'normal', trigger = 'manual', emit = () => {}, sig
     s.scout = scout;
 
     /* 4. The market book every seat reads. One shared, cached prefix. */
-    const book = B.marketBook({ asOf: D.asOf, macro, scout, portfolio: B.portfolioSection(state), metrics: D.metrics, reports: s.reports, news: D.news, filings: D.filings, hl: D.hl });
+    const book = B.marketBook({ asOf: D.asOf, macro, scout, portfolio: B.portfolioSection(state), metrics: D.metrics, reports: s.reports, news: D.news, filings: D.filings });
     s.briefHash = crypto.createHash('sha256').update(book).digest('hex');
     store.writeJSON(`books/${s.id}.json`, { book });
     const system = [{ type: 'text', text: P.CHARTER }, { type: 'text', text: book, cache_control: { type: 'ephemeral' } }];

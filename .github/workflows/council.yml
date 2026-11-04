@@ -1,0 +1,53 @@
+# The council meets every Monday before the US open, here on GitHub, and its decision enters at that day's open.
+# It needs your Anthropic key once: repository Settings > Secrets and variables > Actions > New secret,
+# named ANTHROPIC_API_KEY. Optional: SEC_CONTACT (your name and email), which the SEC asks of anyone reading its data.
+# Run it by hand from the Actions tab ("Run workflow") and pick a budget.
+name: Council meeting
+on:
+  schedule:
+    - cron: '0 12 * * 1'   # Mondays 12:00 UTC: 07:00 or 08:00 in New York
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: Budget
+        type: choice
+        options: [normal, low, high]
+        default: normal
+permissions:
+  contents: write
+concurrency:
+  group: index
+  cancel-in-progress: false
+jobs:
+  meet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev
+        working-directory: council
+      - name: Convene the council
+        working-directory: council
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SEC_CONTACT: ${{ secrets.SEC_CONTACT }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::warning::No ANTHROPIC_API_KEY secret yet. Add it under Settings > Secrets and variables > Actions."
+            exit 0
+          fi
+          node engine/cli.js session --preset "${{ inputs.budget || 'normal' }}" --trigger "${{ github.event_name == 'schedule' && 'scheduled' || 'manual' }}" --device GitHub
+      - run: node engine/cli.js update
+        working-directory: council
+      - name: Save to the repository
+        run: |
+          git config user.name "Oazy council"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index
+          git diff --cached --quiet && exit 0
+          git commit -q -m "Council meeting $(date -u '+%Y-%m-%d')"
+          for i in 1 2 3; do git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0; sleep 5; done
+          exit 1

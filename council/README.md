@@ -1,18 +1,12 @@
 # Oazy Council
 
-A council of Claude agents that tries to always hold the best portfolio it can find. Each week it reads every name in a 155-name universe, debates, attacks its own ideas, and decides what to hold until the next session. Every decision goes into a tamper-evident paper-trading record, measured against the S&P 500 (SPY) and the Nasdaq 100 (QQQ).
+A council of Claude agents that tries to always hold the best portfolio it can find. Each week it reads every name in a 155-name universe, debates, attacks its own ideas, and decides what to hold until the next session. Every decision goes into a tamper-evident paper index in this repository ([`../index/council`](../index/council)), measured against the S&P 500 (SPY) and the Nasdaq 100 (QQQ).
 
-It runs in three places, all on one account:
-
-- **Oazy Research** on Windows, as its second portfolio next to Core v1.0 (the app lives in [`../research`](../research)).
-- A **phone app** for Android that runs the council on its own, with your API key pasted in the app.
-- A **command line** for running sessions from scripts or Task Scheduler.
-
-The PC and the phone share the same portfolio, ledger, sessions and settings, kept in sync through a GitHub repository you own.
+It meets on GitHub every Monday before the US open ([`../.github/workflows/council.yml`](../.github/workflows/council.yml)). The Oazy Research apps on Windows and Android only show the result.
 
 ## How a session works
 
-1. **Data.** Free sources only: two years of daily prices (Yahoo, with CBOE as a fallback), SEC filings and fundamentals (EDGAR), company and macro news (RSS), FRED macro series, the CBOE volatility indexes, and Hyperliquid's list of tradable perps (shown for reference only).
+1. **Data.** Free sources only: two years of daily prices (Yahoo, with CBOE as a fallback), SEC filings and fundamentals (EDGAR), company and macro news (RSS), FRED macro series and the CBOE volatility indexes.
 2. **Analysts read every name.** Code only measures and formats the numbers. Batches of cheaper Claude calls write a dossier on **all 155 names**: the business, the numbers, the news and filings, the bull and bear cases, catalysts, red flags and a verdict. No name is ranked out or dropped by code.
 3. **Scout** (High budget only). Searches the web for the past week's news and the next two weeks of catalysts.
 4. **The market book.** The macro picture, the scout's briefing, the current portfolio, and every name's numbers and dossier go into one shared, cached document that every seat reads.
@@ -22,8 +16,6 @@ The PC and the phone share the same portfolio, ledger, sessions and settings, ke
 8. **Risk.** Sentinel can veto names, cap weights and raise the cash floor. These rulings bind the chair.
 9. **Chair.** Arbiter decides: the holdings, their weights, a thesis for each, the exact condition that would make the council sell each one, and the dissent it overruled.
 10. **Record.** Hard limits are enforced in code: 5 to 15 positions, at most 15% in one stock or 25% in one ETF, at most 40% in one sector, and at most 40% in cash. The decision is then written to the ledger.
-
-The **daily watch** runs on weekdays after the close. It is one cheap call that checks each holding against its own sell condition and the latest news. If a thesis has broken, it can call an emergency session (this is off by default; by default it only notifies you).
 
 ## Budgets
 
@@ -35,93 +27,56 @@ The costs below are estimates per session at current API prices. The app shows t
 | Normal | 7 seats, Opus 5.5, medium effort | 1 round, red team | Haiku 5.5 | Opus 5.5, high effort | about $2.37 |
 | High | 8 seats, Opus 5.5, high effort | 2 rounds, red team, rebuttals, web scout | Sonnet 5.5 | Opus 5.5, extra-high effort | about $9.35 |
 
-A weekly Normal session plus the daily watch costs roughly $10 to $12 a month.
+One Normal session a week costs roughly $10 a month.
 
 ## Honesty about results
 
 There is deliberately **no backtest**. A language model already knows what happened in the past, so a backtest of the council would be contaminated by hindsight and would prove nothing. The only evidence that counts is the **forward paper record**:
 
-- Each decision is appended to `ledger.jsonl` with its timestamp, its target weights and a hash of the exact market book the council read. Every entry is chained to the previous one with SHA-256, so any later edit is detectable (Performance, then "Verify again").
+- Each decision is appended to `ledger.jsonl` with its timestamp, its target weights and a hash of the exact market book the council read. Every entry is chained to the previous one with SHA-256, so any later edit is detectable (`node engine/cli.js verify`, and the apps show whether the chain is intact).
 - The record is an index, not a broker account: a decision **enters at the open of its own New York trading day** (09:30), or the next open on a weekend or holiday, with a 0.1% cost on everything traded. A decision made during or after the session gets up to one day of hindsight; that is the price of an index that starts on the day it is decided.
 - Values use total-return (dividend-adjusted) prices, the same as the SPY and QQQ benchmarks.
 
 A few weeks of results is noise. Judge it after several months, and preferably against QQQ, which is the hardest benchmark here.
 
-## On the PC: Oazy Research
+## Running it
 
-The council is the **Council** portfolio inside Oazy Research. Switch between Core v1.0 and Council with the portfolio button next to the logo. See [`../research/README.md`](../research/README.md) to run or build it.
+The meeting needs your Anthropic API key once, as a repository secret: Settings, Secrets and variables, Actions, New repository secret, named `ANTHROPIC_API_KEY`. Create or rotate keys at https://console.anthropic.com/settings/keys. The key stays in GitHub's secret store and is only sent to Anthropic. Optional: a secret named `SEC_CONTACT` (for example `Your Name you@example.com`), which the SEC asks of automated clients.
 
-Paste your Anthropic API key in the Council's **Settings** (the gear). It is encrypted with Windows' own protection for your user, never synced, and only sent to Anthropic. Create or rotate keys at https://console.anthropic.com/settings/keys. The command line can also read it from the `ANTHROPIC_API_KEY` environment variable.
-
-Optional: fill in the SEC contact in Settings (for example `Your Name you@example.com`). The SEC asks automated clients to identify themselves. It stays on that device.
-
-To try it without a key, switch to **Demo** at the top (or tick **Demo run**). Demo runs use scripted seats on real market data, cost nothing, and keep their own separate record.
-
-### Schedule
-
-While Oazy Research is running (it can stay in the tray), it convenes on its own every week (Sunday 20:00 local time by default) and runs the watch on weekdays at 22:30. If every device was off at the time slot, it catches up within three days. Change all of this in Settings.
-
-Without the app, you can use Task Scheduler with the command line:
-
-```powershell
-schtasks /Create /SC WEEKLY /D SUN /ST 20:00 /TN "Oazy Council" /TR "cmd /c cd /d C:\Users\jpcpa\Paizy\council && npm run session -- --preset normal"
-```
-
-## Phone app (Android)
-
-The phone app does not need the PC. It runs the same council engine on the phone, with your own API key.
-
-1. Install `OazyCouncil.apk`. Android will ask you to allow installs from your file manager or browser.
-2. Open **Settings** in the app and paste your Anthropic API key. It is encrypted with the phone's keystore, never synced, and only sent to Anthropic.
-3. Fill in the account (below) to share everything with Oazy Research on the PC.
-
-While a session runs, the phone keeps the screen on and shows a notification so Android does not stop it. The weekly session is run by whichever device is on at the time: the PC runs it on its own; if the PC was off, the phone shows "This week's session is due" with a button to convene it. The phone runs the cheap daily watch whenever it is open and the watch is owed.
-
-## One account on the PC and the phone
-
-Both apps keep the shared record in a private GitHub repository. Set it up once:
-
-1. Create a **private** repository, for example `oazy-council-data`. Leave it empty.
-2. Create a fine-grained token at github.com, Settings, Developer settings, Personal access tokens, Fine-grained tokens. Give it access to **only that repository**, with **Contents: Read and write**. Nothing else.
-3. In Oazy Research (**Council, Settings, Account sync**) and in the phone app (**Settings, Account**), enter `you/oazy-council-data` and paste the token.
-
-What is shared: the ledger, the watch log, every session transcript, the shared settings (budget, schedule, watch) and a live status. What is never shared: API keys, the token itself, the SEC contact, and the market-data caches. The repository can be public if you want an open, verifiable record: anyone could then read the portfolio, the ledger and every transcript, but only your token can write to it. When one device is in session, the other shows "In session on ..." with the current step and will not start a second session; its result arrives when it ends. If both devices record a decision while apart, the ledger chains are joined, so nothing is lost and the hash chain still verifies.
-
-The token is encrypted on each device (Windows protection on the PC, the keystore on the phone). If it leaks, delete it on GitHub and make a new one.
-
-To rebuild the APK, you need the Android SDK (build-tools and a platform) and a JDK:
-
-```bash
-ANDROID_HOME=/path/to/sdk npm run apk      # writes dist/OazyCouncil.apk
-```
-
-Keep the signing keystore (`~/.oazy-council.keystore` by default, or `OC_KEYSTORE`). Phones can only update the app if it is signed with the same key.
+Without the secret, the Monday job skips the meeting and says so. To meet outside the schedule, open the Actions tab, pick "Council meeting", then "Run workflow", and choose a budget.
 
 ## Command line
 
 ```bash
-npm run session -- --preset low|normal|high   # convene now
+npm run update                                 # rebuild both indexes in ../index from their ledgers and fresh prices
+npm run session -- --preset low|normal|high   # convene now (needs ANTHROPIC_API_KEY in the environment)
 npm run demo                                   # demo session, no API calls
-npm run watch                                  # daily check of every holding
 npm run status                                 # current holdings and record
 npm run estimate                               # cost estimate for each preset
 node engine/cli.js verify                      # check the ledger's hash chain
 npm test                                       # offline tests
 ```
 
-Oazy Research and the command line share one data folder: `%APPDATA%\Oazy Council\data` (or set `OAZY_COUNCIL_DATA`). Sessions, market books, the ledger, the watch log and the price cache are all plain JSON in that folder.
+Sessions write into `../index/council` (or into `OAZY_COUNCIL_DATA` if you set it). Core's index is in `../index/core`: edit `book.json` to rotate it.
+
+## Android app
+
+`release/OazyResearch.apk` shows both indexes, read from this repository. To rebuild it you need the Android SDK (build-tools and a platform) and a JDK:
+
+```bash
+ANDROID_HOME=/path/to/sdk npm run apk      # writes dist/OazyResearch.apk
+```
+
+Keep the signing keystore (`~/.oazy-council.keystore` by default, or `OC_KEYSTORE`). Phones can only update the app if it is signed with the same key.
 
 ## Layout
 
 ```
-engine/                 data, metrics, prompts, the session, rules, ledger, watch, account sync (sync.js), the shared core (core.js), CLI
-mobile/                 the phone screens and core.bundle.js (the engine built for the phone)
-phone/                  the phone's engine entry and its small Node shims; `npm run bundle` rebuilds core.bundle.js
-android/                the Android shell and its build script
-release/                the signed APK
-test/                   offline tests
+engine/       data, metrics, prompts, the session, rules, the ledger, the index updater (indexer.js) and the CLI
+mobile/       the Android app's screens
+android/      the Android shell and its build script
+release/      the signed APK
+test/         offline tests
 ```
-
-The desktop screens are in `../research/app/council.*`; Oazy Research ships a copy of `engine/`.
 
 This is a research tool and a paper-trading record, not financial advice.

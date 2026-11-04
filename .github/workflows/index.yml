@@ -1,0 +1,36 @@
+# Keeps both Oazy indexes current: every hour while New York trades, and once after the close.
+# The apps on the PC and the phone only read what this writes to index/.
+name: Update the indexes
+on:
+  schedule:
+    - cron: '45 13-20 * * 1-5'   # hourly during the US session (UTC)
+    - cron: '30 21 * * 1-5'      # after the close (summer time)
+    - cron: '30 22 * * 1-5'      # after the close (winter time)
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: index
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev
+        working-directory: council
+      - run: node engine/cli.js update
+        working-directory: council
+      - name: Save to the repository
+        run: |
+          git config user.name "Oazy indexes"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index
+          git diff --cached --quiet && exit 0
+          git commit -q -m "Indexes $(date -u '+%Y-%m-%d %H:%M') UTC"
+          for i in 1 2 3; do git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0; sleep 5; done
+          exit 1
