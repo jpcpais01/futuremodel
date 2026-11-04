@@ -20,6 +20,13 @@
       "awareness": "Be wise and bold",
       "color": "#2fd6a8",
       "createdAt": "2026-11-04T16:48:20.869Z"
+    },
+    {
+      "id": "council-vision",
+      "name": "Vision",
+      "awareness": "Be wise and bold. Aim to try and hold the best portfolio that can give us best returns. I dont want treasuries or bonds.",
+      "color": "#ff8a5c",
+      "createdAt": "2026-11-04T17:29:26.767Z"
     }
   ]
 }
