@@ -108,6 +108,24 @@ async function save(s, how, { token, onStep = () => {} } = {}) {
   throw new Error('GitHub kept changing while saving. Try again in a minute.');
 }
 
+/* The record in the repository is re-priced by GitHub every hour. When that has not happened (the schedule is off, or late),
+   the app values the portfolio itself, from the same ledger and fresh prices, so an entry that is due shows as entered.
+   This only changes what is shown; nothing is written. */
+function stale(st, now = Date.now()) {
+  if (!st) return false;
+  const age = now - Date.parse(st.updatedAt || 0), today = ledger.etParts(now).date, open = Date.parse(ledger.openIso(today));
+  const due = (st.pending || []).some((p) => p.mode === 'now' || (p.on && (p.on < today || (p.on === today && now > open))));
+  return due || age > 75 * 6e4;
+}
+const refreshedAt = new Map();
+async function refresh() {
+  if (!prior || !stale(prior) || Date.now() - (refreshedAt.get(cur.id) || 0) < 15 * 6e4) return null;
+  refreshedAt.set(cur.id, Date.now());
+  const built = await indexer.build({ prior, council: cur });
+  prior = built.state;
+  return built.state;
+}
+
 const current = () => prior;
 const currentCouncil = () => summary(cur);
-module.exports = { load, list, create, convene, save, current, currentCouncil, estimate: session.estimate, LIMITS: CO.LIMITS };
+module.exports = { load, list, create, convene, save, refresh, stale, current, currentCouncil, estimate: session.estimate, LIMITS: CO.LIMITS };
