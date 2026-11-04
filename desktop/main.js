@@ -7,7 +7,7 @@ const { app, BrowserWindow, protocol, net, session, ipcMain, shell, safeStorage,
 const path = require('path'), fs = require('fs'), { pathToFileURL } = require('url');
 
 const APP_DIR = path.join(__dirname, '..', 'app');
-const SEC_UA = 'OazyResearch/3.0 (personal research) 158115534+jpcpais01@users.noreply.github.com';
+let SEC_UA = 'OazyResearch/3.0 (personal research) 158115534+jpcpais01@users.noreply.github.com';   // the SEC blocks this one; João's own contact from Settings replaces it
 // Free sources the council reads. They answer browsers without CORS headers, so the app adds them.
 const DATA_HOSTS = /(^|\.)(finance\.yahoo\.com|sec\.gov|news\.google\.com|stlouisfed\.org|cboe\.com|gdeltproject\.org|nasdaq\.com|federalreserve\.gov)$/i;
 const SEC_HOSTS = /(^|\.)sec\.gov$/i;
@@ -74,6 +74,7 @@ ipcMain.handle('token:set', (_e, t) => {
     fs.mkdirSync(path.dirname(tokenFile()), { recursive: true }); fs.writeFileSync(tokenFile(), safeStorage.encryptString(String(t))); return true;
   } catch { return false; }
 });
+ipcMain.on('sec', (_e, c) => { const v = String(c || '').replace(/[^\x20-\x7e]/g, '').trim().slice(0, 120); if (v) SEC_UA = 'OazyResearch ' + v; });
 ipcMain.on('open', (_e, u) => { if (/^https:\/\//.test(String(u))) shell.openExternal(u); });
 ipcMain.on('awake', (_e, on) => {
   if (on && awake == null) awake = powerSaveBlocker.start('prevent-app-suspension');

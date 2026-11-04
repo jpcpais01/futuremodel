@@ -11,9 +11,10 @@ const chains = new Map();
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /* Requests to one host run one after another, spaced by HOST_GAP. */
-function paced(host, fn) {
+function paced(host, fn, signal) {
   const prev = chains.get(host) || Promise.resolve();
   const next = prev.catch(() => {}).then(async () => {
+    if (signal?.aborted) throw new Error('cancelled');   // a stopped meeting's queued requests leave the line at once
     const gap = HOST_GAP[host] ?? 120, since = Date.now() - (lastHit.get(host) || 0);
     if (since < gap) await wait(gap - since);
     lastHit.set(host, Date.now());
@@ -46,7 +47,7 @@ async function get(url, { as = 'text', tries = 4, timeout = 25000, headers = {},
         const stop = () => ac.abort(); signal?.addEventListener('abort', stop);
         try { return await doFetch(url, { method, headers: h, body, signal: ac.signal, redirect: 'follow' }); }
         finally { clearTimeout(to); signal?.removeEventListener('abort', stop); }
-      });
+      }, signal);
       if (res.status === 429 || res.status >= 500) { err = new Error(`HTTP ${res.status} ${host}`); await wait(1500 * 2 ** i + Math.random() * 500); continue; }
       if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status} ${host}`), { fatal: true });
       return as === 'json' ? await res.json() : await res.text();
@@ -61,9 +62,9 @@ const getJSON = (url, o = {}) => get(url, { ...o, as: 'json' });
 const postJSON = (url, obj, o = {}) => get(url, { ...o, as: 'json', method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(obj) });
 
 /* Runs async jobs with a concurrency cap; per-host pacing still applies underneath. */
-async function pool(items, n, fn) {
+async function pool(items, n, fn, signal) {
   const out = new Array(items.length); let i = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length) { const k = i++; out[k] = await fn(items[k], k); } }));
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length) { if (signal?.aborted) throw new Error('cancelled'); const k = i++; out[k] = await fn(items[k], k); } }));
   return out;
 }
 

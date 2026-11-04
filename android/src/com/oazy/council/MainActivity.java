@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
    browser cannot: reading free data sources that send no CORS headers, and the SEC's contact header. */
 public class MainActivity extends Activity {
   static final String ORIGIN_HOST = "app.oazy.local";
-  static final String SEC_UA = "OazyResearch/3.0 (personal research) 158115534+jpcpais01@users.noreply.github.com";
+  static volatile String SEC_UA = "OazyResearch/3.0 (personal research) 158115534+jpcpais01@users.noreply.github.com";   // replaced by the contact from Settings
   static final Pattern DATA_HOSTS = Pattern.compile("(^|\\.)(finance\\.yahoo\\.com|sec\\.gov|news\\.google\\.com|stlouisfed\\.org|cboe\\.com|gdeltproject\\.org|nasdaq\\.com|federalreserve\\.gov)$", Pattern.CASE_INSENSITIVE);
   private WebView web;
   private FrameLayout root;

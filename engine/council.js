@@ -62,11 +62,13 @@ async function create({ name, awareness, token }) {
 }
 
 /* A meeting of the loaded council. key: the Anthropic key for this meeting (held in memory only). rehearsal: no AI, no cost, nothing saved. */
-async function convene({ preset = 'normal', rounds = C.ROUNDS.default, key, rehearsal = false, emit, signal, device = 'Oazy Research' }) {
+let convenes = 0;
+async function convene({ preset = 'normal', rounds = C.ROUNDS.default, key, rehearsal = false, emit, signal, settings = {}, device = 'Oazy Research' }) {
+  const gen = ++convenes;   // a stopped meeting that finishes letting go later must not switch the next one's mode
   llm.setMock(!!rehearsal);
   if (!rehearsal) llm.setKey(key);
-  try { return await session.run({ preset, rounds, trigger: 'manual', emit, signal, device, apply: null, council: cur }); }
-  finally { if (rehearsal) llm.setMock(false); }
+  try { return await session.run({ preset, rounds, trigger: 'manual', emit, signal, settings, device, apply: null, council: cur }); }
+  finally { if (rehearsal && gen === convenes) llm.setMock(false); }
 }
 
 /* Saves a decided meeting. how: 'now', 'open', 'YYYY-MM-DD', or 'skip' (keep the record, leave the portfolio as it is). */

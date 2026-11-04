@@ -32,6 +32,11 @@ public class Native {
     if (url != null && url.startsWith("https://")) act.runOnUiThread(() -> { try { act.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception ignored) {} });
   }
 
+  @JavascriptInterface public void setSecContact(String c) {
+    if (c == null) return; String v = c.replaceAll("[^\\x20-\\x7e]", "").trim(); if (v.length() > 120) v = v.substring(0, 120);
+    if (!v.isEmpty()) MainActivity.SEC_UA = "OazyResearch " + v;
+  }
+
   @JavascriptInterface public void keepAwake(boolean on) {
     act.runOnUiThread(() -> { if (on) act.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); else act.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); });
   }

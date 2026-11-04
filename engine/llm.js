@@ -75,6 +75,7 @@ async function mockCall({ mock, onText, onThinking, signal, schema }) {
  * Returns { data, text, usage, cost, model, ms }.
  */
 async function call(o) {
+  if (o.signal?.aborted) throw Object.assign(new Error('cancelled'), { code: 'CANCELLED' });
   if (MOCK) return mockCall(o);
   const c = getClient(), t0 = Date.now();
   const isHaiku = /haiku/.test(o.model);

@@ -7,17 +7,17 @@ const HOST = (() => {
   if (pc) return {
     platform: 'pc', version: pc.version,
     getToken: () => pc.getToken(), setToken: (t) => pc.setToken(t),
-    openUrl: (u) => pc.openUrl(u), keepAwake: (on) => pc.keepAwake(!!on),
+    openUrl: (u) => pc.openUrl(u), keepAwake: (on) => pc.keepAwake(!!on), setSecContact: (c) => pc.setSecContact && pc.setSecContact(c),
     win: pc.win, onBeforeClose: pc.onBeforeClose,
   };
   if (an) return {
     platform: 'android', version: an.version(),
     getToken: async () => an.getToken() || null, setToken: async (t) => an.setToken(t || ''),
-    openUrl: (u) => an.openUrl(u), keepAwake: (on) => an.keepAwake(!!on),
+    openUrl: (u) => an.openUrl(u), keepAwake: (on) => an.keepAwake(!!on), setSecContact: (c) => an.setSecContact && an.setSecContact(c || ''),
   };
   return {
-    platform: 'web', version: '3.2.3',
+    platform: 'web', version: '3.2.4',
     getToken: async () => ls.get('oz:token'), setToken: async (t) => ls.set('oz:token', t || null),
-    openUrl: (u) => window.open(u, '_blank', 'noopener'), keepAwake: () => {},
+    openUrl: (u) => window.open(u, '_blank', 'noopener'), keepAwake: () => {}, setSecContact: () => {},
   };
 })();

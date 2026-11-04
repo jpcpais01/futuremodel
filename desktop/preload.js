@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('oazyHost', {
   getToken: () => ipcRenderer.invoke('token:get'),
   setToken: (t) => ipcRenderer.invoke('token:set', t || ''),
   openUrl: (u) => ipcRenderer.send('open', String(u)),
+  setSecContact: (c) => ipcRenderer.send('sec', String(c || '')),
   keepAwake: (on) => ipcRenderer.send('awake', !!on),
   win: { min: () => ipcRenderer.send('win', 'min'), max: () => ipcRenderer.send('win', 'max'), close: () => ipcRenderer.send('win', 'close') },
   onBeforeClose: (fn) => { ask = fn; },

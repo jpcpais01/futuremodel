@@ -157,6 +157,28 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name)
       assert.ok(mem.files.size > 100, 'prices kept in memory');
     } finally { llm.setMock(false); delete process.env.OAZY_BUDGET_SCALE; net.setFetch((...a) => fetch(...a)); store.use(fsBackend(tmp)); }
   });
+  await t('stopping a meeting lets go at once, and the next one runs clean', async () => {
+    const net = require('../engine/net'), council = require('../engine/council');
+    store.use(store.memory());
+    let hits = 0;
+    net.setFetch((url, o) => new Promise((res, rej) => { hits++; const tm = setTimeout(() => res(new Response('no', { status: 404 })), 400); o?.signal?.addEventListener('abort', () => { clearTimeout(tm); rej(new Error('aborted')); }); }));
+    process.env.OAZY_BUDGET_SCALE = '0.002';
+    try {
+      const ac = new AbortController(), after = [];
+      let stopped = false;
+      const p1 = council.convene({ preset: 'low', rounds: 1, rehearsal: true, signal: ac.signal, emit: (e) => { if (stopped) after.push(e.type); } }).catch((e) => e);
+      await net.wait(700); const h0 = hits; ac.abort(); stopped = true; const t0 = Date.now();
+      const r1 = await p1;
+      assert.ok(r1 instanceof Error, 'the stopped meeting ends');
+      assert.ok(Date.now() - t0 < 1500, 'it lets go within a moment, took ' + (Date.now() - t0) + 'ms');
+      await net.wait(600); assert.ok(hits - h0 <= 6, 'no more requests after the stop: ' + (hits - h0));
+      assert.ok(after.filter((x) => x === 'progress').length <= 4, 'it stops counting: ' + after.join(','));
+      assert.ok(llm.isMock() === false, 'rehearsal mode is switched back off');
+      net.setFetch(async () => new Response('no', { status: 404 }));
+      const s2 = await council.convene({ preset: 'low', rounds: 1, rehearsal: true, emit: () => {} });
+      assert.strictEqual(s2.status, 'decided');
+    } finally { llm.setMock(false); delete process.env.OAZY_BUDGET_SCALE; net.setFetch((...a) => fetch(...a)); store.use(fsBackend(tmp)); }
+  });
   await t('index: an empty council writes valid JSON', async () => {
     const indexer = require('../engine/indexer');
     store.use(store.memory());
