@@ -69,7 +69,7 @@ async function build({ prior = null, fetchPrices = true, log = () => {} } = {}) 
   return { state, json: stateJson(state), readme: readme(state), chart: chartSvg(state) };
 }
 /* One line per top-level key, so the committed file reads well in a diff. */
-const stateJson = (state) => '{\n' + Object.entries(state).map(([k, v]) => JSON.stringify(k) + ':' + JSON.stringify(v)).join(',\n') + '\n}\n';
+const stateJson = (state) => '{\n' + Object.entries(state).filter(([, v]) => v !== undefined).map(([k, v]) => JSON.stringify(k) + ':' + JSON.stringify(v)).join(',\n') + '\n}\n';
 
 /* The page GitHub shows for index/: both records in a table, the holdings, and a chart. */
 function readme(s) {
