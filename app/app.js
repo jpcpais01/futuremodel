@@ -169,7 +169,7 @@
       </div></div>
       ${banner}
       <div class="chartBox"><canvas id="homeC"></canvas><div class="cap" id="homeCap"></div><div class="pulse"></div>
-        <div class="chips ranges">${['1W', '1M', '3M', 'All'].map((r) => `<button class="chip ${range === r.toLowerCase() ? 'on' : ''}" data-r="${r.toLowerCase()}">${r}</button>`).join('')}</div></div>
+        <div class="chips ranges">${['Today', '1W', '1M', 'YTD', 'All'].map((r) => `<button class="chip ${range === r.toLowerCase() ? 'on' : ''}" data-r="${r.toLowerCase()}">${r}</button>`).join('')}</div></div>
       <div class="chips" style="grid-column:1;gap:16px;font-size:13px;color:var(--dim)"><span class="drift"><i class="dotc" style="background:#fff"></i>${esc(CO.name || 'Council')}</span><span class="drift"><i class="dotc" style="background:#33c3ff"></i>S&amp;P 500</span><span class="drift"><i class="dotc" style="background:#ffb547"></i>Nasdaq 100</span></div>
       <div class="side">
         ${pend ? `<div class="card glass next"><h4>Waiting to enter</h4><div class="when">${pend.mode === 'now' ? 'Entering now' : 'At the open on ' + esc(day(pend.on, { weekday: 'short', month: 'short', day: 'numeric' }))}</div><p>${Object.keys(pend.target || {}).length} holdings, decided ${esc(day(pend.at))}. Until then the current portfolio stays.</p><div class="tkwrap" style="margin-top:12px">${Object.entries(pend.target || {}).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t, w]) => tkc(t, w)).join('')}</div></div>` : ''}
@@ -191,16 +191,61 @@
     $$('[data-seat]', el).forEach((b) => (b.onclick = () => seatSheet(b.dataset.seat)));
     const dl = $('#dropLater', el); if (dl) dl.onclick = () => confirmSheet('Discard this meeting?', 'Its decision will not enter the portfolio and it will not be kept. What it cost is already spent.', 'Discard', () => { store.set('unsaved', null); render(); });
   }
+  /* The chart: intraday paths for Today (5-minute), 1W (15-minute) and 1M (hourly), the daily record for YTD, and All
+     at whichever of those fits the record's length. Intraday paths come in after the page draws; the daily marks show first. */
+  const INTRA = new Map();   // council|range -> { at, data }
+  let intraBusy = null, liveTick = null;
+  function wantIntra(r = range) { return r === 'today' || r === '1w' || r === '1m' || (r === 'all' && S?.fills?.length && E.curve.allRange(S)); }
+  function fetchIntra(r = range) {
+    if (!S?.fills?.length || !wantIntra(r)) return;
+    const k = CUR + '|' + r, hit = INTRA.get(k), ttl = (r === 'today' || E.curve.allRange(S) === 'today') ? 100e3 : 6e5;
+    if (hit && Date.now() - hit.at < ttl) return;
+    if (intraBusy === k) return; intraBusy = k;
+    const st = S, want = CUR;
+    E.curve.intraday(st, r).then((d) => { INTRA.set(k, { at: Date.now(), data: d }); if (want === CUR && page === 'home' && range === r) { drawChart(); liveHero(); } }, (e) => console.warn('intraday', e)).finally(() => { if (intraBusy === k) intraBusy = null; });
+  }
+  /* The headline follows the latest intraday price when it is newer than the record's last mark. */
+  function liveHero() {
+    const d = [...INTRA.entries()].filter(([k]) => k.startsWith(CUR + '|')).map(([, v]) => v.data).filter(Boolean).sort((a, b) => b.rows.at(-1)[0] - a.rows.at(-1)[0])[0];
+    if (!d || !S?.series?.length) return;
+    const last = d.rows.at(-1);
+    if (last[0] <= Date.parse(S.updatedAt || 0)) return;
+    const ret = last[1] / S.capital - 1, big = $('#p-home .big'), sub = $('#p-home .sub b');
+    if (big) { big.textContent = pc(ret); big.className = 'big ' + cls(ret); }
+    if (sub) sub.textContent = usd(last[1]);
+    // the benchmarks too, when this path starts at the record's first moment
+    const r0 = d.rows[0], st = document.querySelectorAll('#p-home .stats .st b');
+    if (S.fills?.length && Math.abs(r0[0] - Date.parse(S.fills[0].at)) < 6e4 && st.length >= 2) {
+      [[2, 0], [3, 1]].forEach(([i, j]) => { if (num(r0[i]) && num(last[i])) { const v = last[i] / r0[i] - 1; st[j].textContent = pc(v); st[j].className = cls(v); } });
+    }
+  }
   function drawChart(again) {
     const c = $('#homeC'); if (!c || !S?.series?.length) return;
-    const cut = { '1w': 7, '1m': 31, '3m': 92 }[range];
-    let rows = S.series.map((r) => [ts(r[0]), r[1], r[2], r[3]]);
-    if (cut) { const from = rows[rows.length - 1][0] - cut * 864e5; const r2 = rows.filter((r) => r[0] >= from); if (r2.length > 1) rows = r2; }
-    const base = rows[0], rel = (i) => rows.filter((r) => num(r[i]) && num(base[i])).map((r) => [r[0], (r[i] / base[i] - 1) * 100]);
+    clearInterval(liveTick); liveTick = setInterval(() => { if (page !== 'home' || !$('#homeC')) return clearInterval(liveTick); fetchIntra(); }, 60e3);
+    const hit = INTRA.get(CUR + '|' + range)?.data;
+    fetchIntra();
+    let rows, xl = null, label;
+    const fmtT = (t) => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const fmtD = (t) => new Date(t).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    if (hit && wantIntra()) {
+      // Intraday rows sit on an even grid, so nights and weekends take no room. The labels give back the real time.
+      const real = hit.rows.map((r) => r[0]), multi = hit.key !== 'today';
+      rows = hit.rows.map((r, i) => [i * 6e4, r[1], r[2], r[3]]);
+      const at = (t) => real[Math.max(0, Math.min(real.length - 1, Math.round(t / 6e4)))];
+      xl = (t, mode) => { const r = at(t); return mode === 'axis' ? (multi ? (hit.key === '1m' ? new Date(r).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : new Date(r).toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + fmtT(r)) : fmtT(r)) : (multi ? fmtD(r) + ', ' + fmtT(r) : fmtT(r)); };
+    } else {
+      rows = S.series.map((r) => [ts(r[0]), r[1], r[2], r[3]]);
+      const from = range === 'ytd' ? Date.parse(new Date().getFullYear() + '-01-01T00:00:00Z') : range === '1w' ? rows.at(-1)[0] - 7 * 864e5 : range === '1m' ? rows.at(-1)[0] - 31 * 864e5 : range === 'today' ? rows.at(-1)[0] - 1.5 * 864e5 : null;
+      if (from) { const r2 = rows.filter((r) => r[0] >= from); if (r2.length > 1) rows = r2; }
+    }
+    // All counts from the starting capital, like the headline; the other ranges from their own first moment.
+    const base = rows[0], b1 = range === 'all' ? S.capital : base[1];
+    const rel = (i) => rows.filter((r) => num(r[i]) && num(base[i])).map((r) => [r[0], (r[i] / (i === 1 ? b1 : base[i]) - 1) * 100]);
     const fy = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%';
-    const capFn = (b) => { if (!b) setCap($('#homeCap'), fy(rel(1).slice(-1)[0]?.[1] ?? 0), range === 'all' ? 'since it started' : 'over ' + { '1w': 'the week', '1m': 'the month', '3m': 'three months' }[range], ''); else setCap($('#homeCap'), fy(b[1]), day(b[0], { month: 'short', day: 'numeric', year: 'numeric' })); };
-    chart(c, [{ p: rel(1), name: CO.name || 'Council' }, { p: rel(2), c: '#33c3ff', name: 'S&P' }, { p: rel(3), c: '#ffb547', name: 'NDX' }], { ref: 0, refL: '0%', fy, capFn, key: again ? c._key : range + S.updatedAt, pl: innerWidth < 900 ? 18 : 64, pr: innerWidth < 900 ? 96 : 140, pt: innerWidth < 900 ? 96 : 58 });
-    capFn(null);
+    label = { all: 'since it started', today: 'today', '1w': 'over the week', '1m': 'over the month', ytd: 'this year' }[range];
+    const capFn = (b) => { if (!b) setCap($('#homeCap'), fy(rel(1).slice(-1)[0]?.[1] ?? 0), label, ''); else setCap($('#homeCap'), fy(b[1]), xl ? xl(b[0], 'tip') : day(b[0], { month: 'short', day: 'numeric', year: 'numeric' })); };
+    chart(c, [{ p: rel(1), name: CO.name || 'Council' }, { p: rel(2), c: '#33c3ff', name: 'S&P' }, { p: rel(3), c: '#ffb547', name: 'NDX' }], { ref: 0, refL: '0%', fy, capFn, xl, key: again ? c._key : range + S.updatedAt + (hit ? 'i' + INTRA.get(CUR + '|' + range).at : ''), pl: innerWidth < 900 ? 18 : 64, pr: innerWidth < 900 ? 96 : 140, pt: innerWidth < 900 ? 96 : 58 });
+    capFn(null); liveHero();
   }
   function allocRing() {
     const rows = [...(S.positions || []).map((p) => ({ t: p.t, w: p.weight })), ...(num(S.cash) && S.cash > .05 ? [{ t: 'Cash', w: S.cash }] : [])];
