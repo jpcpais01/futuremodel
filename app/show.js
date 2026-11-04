@@ -248,7 +248,10 @@ const SHOW = (() => {
     const w = $('#shWall');
     if (!wallBuilt) {
       w.innerHTML = C.UNIVERSE.map((u) => `<div class="wt" data-t="${esc(u[0])}" title="${esc(u[0] + ' · ' + u[1])}">${mark(u[0], 44)}</div>`).join('');
-      const m = document.createElement('div'); m.className = 'wall-meta'; m.id = 'wallMeta'; $('#show').appendChild(m);
+      // One counter row for the life of the app: a second meeting reuses it, empty, instead of stacking a new one
+      // behind the old (which kept showing the last meeting's numbers).
+      let m = $('#wallMeta'); if (!m) { m = document.createElement('div'); m.className = 'wall-meta'; m.id = 'wallMeta'; $('#show').appendChild(m); }
+      m.innerHTML = '';
       wallBuilt = true;
     }
     w.classList.add('on'); fitWall(); $('#wallMeta').classList.add('on'); renderWallMeta();
@@ -261,8 +264,8 @@ const SHOW = (() => {
   function lightTiles(frac) { const tiles = document.querySelectorAll('.wt'); const n = Math.round(tiles.length * frac); tiles.forEach((t, i) => { if (i < n && !t.classList.contains('lit')) t.classList.add('lit'); }); }
   function onProgress(e) {
     if (e.key === 'prices') { counts.prices = Math.max(counts.prices || 0, e.done); lightTiles(counts.prices / e.total); }
-    else if (e.key === 'sec') counts.sec = e.label === 'SEC fundamentals' ? e.done : counts.sec || 0;
-    else if (e.key === 'news') counts.news = Math.max(counts.news || 0, e.done);
+    else if (e.key === 'sec') counts.sec = e.final && !e.done ? 'None' : e.label === 'SEC fundamentals' ? Math.max(+counts.sec || 0, e.done) : counts.sec || 0;
+    else if (e.key === 'news') counts.news = e.final && !e.done ? 'None' : Math.max(+counts.news || 0, e.done);
     else if (e.key === 'macro') counts.macro = e.done ? 'Ready' : '…';
     else if (e.key === 'analysts') counts.dossiers = Math.max(counts.dossiers || 0, e.done);
     renderWallMeta();

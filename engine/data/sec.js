@@ -83,7 +83,7 @@ async function fundamentals(tickers, { signal, log = () => {}, latestFiling = {}
   await pool(tickers, 3, async (t) => {
     if (signal?.aborted) return;
     const cik = map[t.replace('-', '.')] ?? map[t];
-    if (!cik) { byTicker[t] = null; return; }
+    if (!cik) { byTicker[t] = null; onProgress(++done, tickers.length); return; }
     const fresh = latestFiling[t] ? Date.parse(latestFiling[t]) + DAY : 0;
     let rev = [];
     for (const c of REVENUE) {
