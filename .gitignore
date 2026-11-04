@@ -1,15 +1,9 @@
 node_modules/
 dist/
-# old local copy of the engine (no longer used)
-research/engine/
-research/tools/.check.js
-# council's local data (when run from the command line)
-council/data/
-# an old local file that held the tracked wallet address: never commit it
-research/tools/plan.js
+android/build/
+*.keystore
 # index/: only the records are kept; price and data caches are rebuilt on every run
 index/*/*
 !index/*/ledger.jsonl
 !index/*/state.json
-!index/*/book.json
 !index/*/sessions/

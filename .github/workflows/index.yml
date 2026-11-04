@@ -1,6 +1,6 @@
-# Keeps both Oazy indexes current: every hour while New York trades, and once after the close.
-# The apps on the PC and the phone only read what this writes to index/.
-name: Update the indexes
+# Keeps the council portfolio's value current: every hour while New York trades, and once after the close.
+# It only re-prices what the council holds. It never holds a meeting: only João starts those, in the app.
+name: Update the council portfolio
 on:
   schedule:
     - cron: '45 13-20 * * 1-5'   # hourly during the US session (UTC)
@@ -21,16 +21,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm ci --omit=dev
-        working-directory: council
       - run: node engine/cli.js update
-        working-directory: council
       - name: Save to the repository
         run: |
-          git config user.name "Oazy indexes"
+          git config user.name "Oazy Research"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index
           git diff --cached --quiet && exit 0
-          git commit -q -m "Indexes $(date -u '+%Y-%m-%d %H:%M') UTC"
+          git commit -q -m "Council portfolio $(date -u '+%Y-%m-%d %H:%M') UTC"
           for i in 1 2 3; do git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0; sleep 5; done
           exit 1
