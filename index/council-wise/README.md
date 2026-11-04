@@ -4,7 +4,7 @@
 
 A paper portfolio held by a council of Claude agents. Each decision enters when it is applied (at that moment's prices, or at a chosen 09:30 New York open), and holdings drift with prices until the next meeting. Marked on free daily closes, after 0.1% per trade, against SPY and QQQ bought at the same moment.
 
-Updated 2026-11-04 17:27 UTC.
+Updated 2026-11-04 20:34 UTC.
 
 ![Wise against SPY and QQQ](chart.svg)
 
