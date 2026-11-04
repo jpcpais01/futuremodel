@@ -1,11 +1,8 @@
-# The council meets every Monday before the US open, here on GitHub, and its decision enters at that day's open.
+# The council meets only when you start it: Actions tab, "Council meeting", "Run workflow". Nothing runs on a schedule.
 # It needs your Anthropic key once: repository Settings > Secrets and variables > Actions > New secret,
 # named ANTHROPIC_API_KEY. Optional: SEC_CONTACT (your name and email), which the SEC asks of anyone reading its data.
-# Run it by hand from the Actions tab ("Run workflow") and pick a budget.
 name: Council meeting
 on:
-  schedule:
-    - cron: '0 12 * * 1'   # Mondays 12:00 UTC: 07:00 or 08:00 in New York
   workflow_dispatch:
     inputs:
       budget:
@@ -39,7 +36,7 @@ jobs:
             echo "::warning::No ANTHROPIC_API_KEY secret yet. Add it under Settings > Secrets and variables > Actions."
             exit 0
           fi
-          node engine/cli.js session --preset "${{ inputs.budget || 'normal' }}" --trigger "${{ github.event_name == 'schedule' && 'scheduled' || 'manual' }}" --device GitHub
+          node engine/cli.js session --preset "${{ inputs.budget || 'normal' }}" --trigger manual --device GitHub
       - run: node engine/cli.js update
         working-directory: council
       - name: Save to the repository
