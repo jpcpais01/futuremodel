@@ -210,6 +210,16 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name)
     assert.ok(!cn.stale({ updatedAt: '2026-11-04T15:30:00Z', pending: [{ mode: 'open', on: '2026-11-05' }] }, now), 'fresh, entry tomorrow');
     assert.ok(cn.stale({ updatedAt: '2026-11-04T13:00:00Z', pending: [] }, now), 'price update late');
   });
+  await t('chart: holdings rebuilt from the fills, and All picks the timeframe from the record length', () => {
+    const cv = require('../engine/curve');
+    const st = { capital: 1000, fills: [{ at: '2026-11-04T14:30:00.000Z', nav: 1000, fee: 1, trades: [{ t: 'AAA', from: 0, to: 60, px: 10 }, { t: 'BBB', from: 0, to: 20, px: 50 }] },
+      { at: '2026-11-05T14:30:00.000Z', nav: 1100, fee: 1, trades: [{ t: 'BBB', from: 20, to: 0, px: 55 }] }] };
+    const P = cv.periods(st);
+    assert.strictEqual(P[0].units.AAA, 60); assert.strictEqual(P[0].units.BBB, 4); assert.strictEqual(P[0].cash, 199);
+    assert.ok(!('BBB' in P[1].units) && P[1].units.AAA === 60 && Math.abs(P[1].cash - 418) < 1e-9);
+    const t0 = Date.parse('2026-11-04T14:30:00Z');
+    assert.strictEqual(cv.allRange(st, t0 + 3600e3), 'today'); assert.strictEqual(cv.allRange(st, t0 + 4 * 864e5), '1w'); assert.strictEqual(cv.allRange(st, t0 + 20 * 864e5), '1m'); assert.strictEqual(cv.allRange(st, t0 + 90 * 864e5), null);
+  });
   await t('every seat and officer has its own personality', () => {
     const all = { ...C.SEATS, ...C.OFFICERS }, ps = Object.values(all).map((x) => x.persona);
     assert.ok(ps.every((p) => p && p.length > 300)); assert.strictEqual(new Set(ps).size, ps.length);

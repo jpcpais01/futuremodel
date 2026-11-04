@@ -86,4 +86,29 @@ async function lastPrice(sym, signal) {
   return b ? { price: b.c, time: Date.parse(b.d + 'T21:00:00Z') } : null;
 }
 
-module.exports = { history, lastPrice, yahoo };
+/* Intraday prices for the chart: [[ms of the bar's end, close, open, ms of its start], ...] in dollars. interval '5m' | '15m' | '60m', range '1d' | '5d' | '1mo'.
+   Listings outside the US are converted at the latest exchange rate. Cached briefly in memory. */
+const intraCache = new Map();
+async function intraday(sym, interval, range, signal) {
+  const key = `${sym}|${interval}|${range}`, hit = intraCache.get(key), ttl = interval === '5m' ? 90e3 : interval === '15m' ? 5 * 60e3 : 15 * 60e3;
+  if (hit && Date.now() - hit.at < ttl) return hit.p;
+  const p = (async () => {
+    const u = `https://${HOSTS[(turn++) % 2]}/v8/finance/chart/${encodeURIComponent(sym)}?interval=${interval}&range=${range}`;
+    const r = (await getJSON(u, { signal, tries: 2, timeout: 15000 }))?.chart?.result?.[0];
+    if (!r?.timestamp) return null;
+    const cl = r.indicators.quote[0].close, op = r.indicators.quote[0].open, cur = r.meta?.currency || 'USD';
+    let k = 1;
+    if (cur !== 'USD') { const minor = cur === 'GBp' || cur === 'ILA' || cur === 'ZAc', base = minor ? { GBp: 'GBP', ILA: 'ILS', ZAc: 'ZAR' }[cur] : cur; k = 1 / ((await rates(base, signal)).last * (minor ? 100 : 1)); }
+    const out = [];
+    // each bar is stamped at its start; its close belongs at its end
+    const step = { '5m': 3e5, '15m': 9e5, '60m': 36e5 }[interval] || 0;
+    r.timestamp.forEach((t, i) => { const c = cl[i]; if (c != null && Number.isFinite(c)) out.push([t * 1000 + step, c * k, (op[i] ?? c) * k, t * 1000]); });
+    const last = r.meta?.regularMarketPrice, lt = r.meta?.regularMarketTime;
+    if (last && lt && out.length && lt * 1000 > out[out.length - 1][3] && lt * 1000 < out[out.length - 1][0]) out[out.length - 1][0] = lt * 1000;   // the bar still forming ends now
+    return out;
+  })();
+  intraCache.set(key, { at: Date.now(), p }); p.catch(() => intraCache.delete(key));
+  return p;
+}
+
+module.exports = { history, lastPrice, yahoo, intraday };

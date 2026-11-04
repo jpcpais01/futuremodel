@@ -16,7 +16,7 @@ const HOST = (() => {
     openUrl: (u) => an.openUrl(u), keepAwake: (on) => an.keepAwake(!!on),
   };
   return {
-    platform: 'web', version: '3.2.1',
+    platform: 'web', version: '3.2.2',
     getToken: async () => ls.get('oz:token'), setToken: async (t) => ls.set('oz:token', t || null),
     openUrl: (u) => window.open(u, '_blank', 'noopener'), keepAwake: () => {},
   };
