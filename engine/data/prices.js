@@ -8,8 +8,8 @@ const day = (t) => new Date(t).toISOString().slice(0, 10);
 const HOSTS = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];   // two hosts, each paced on its own
 let turn = 0;
 
-/* Returns { sym, bars: [{d, o, h, l, c, ac, v}], meta } or null. ac = close adjusted for splits and dividends. */
-async function yahoo(sym, range = '2y', signal) {
+/* Returns { sym, bars: [{d, o, h, l, c, ac, v}], meta } or null, in US dollars. ac = close adjusted for splits and dividends. */
+async function yahoo(sym, range = '2y', signal, raw = false) {
   const u = `https://${HOSTS[(turn++) % 2]}/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=${range}&includeAdjustedClose=true&events=div%2Csplits`;
   const j = await getJSON(u, { signal });
   const r = j?.chart?.result?.[0];
@@ -21,7 +21,38 @@ async function yahoo(sym, range = '2y', signal) {
     bars.push({ d: day(t * 1000), o: q.open[i] ?? c, h: q.high[i] ?? c, l: q.low[i] ?? c, c, ac: ac[i] ?? c, v: q.volume[i] ?? 0 });
   });
   const m = r.meta || {};
-  return { sym, src: 'yahoo', bars, meta: { price: m.regularMarketPrice, time: m.regularMarketTime ? m.regularMarketTime * 1000 : null, currency: m.currency, name: m.longName || m.shortName, hi52: m.fiftyTwoWeekHigh, lo52: m.fiftyTwoWeekLow } };
+  const out = { sym, src: 'yahoo', bars, meta: { price: m.regularMarketPrice, time: m.regularMarketTime ? m.regularMarketTime * 1000 : null, currency: m.currency, name: m.longName || m.shortName, hi52: m.fiftyTwoWeekHigh, lo52: m.fiftyTwoWeekLow } };
+  return raw || !m.currency || m.currency === 'USD' || /=X$/.test(sym) ? out : toUsd(out, signal);
+}
+
+/* Listings outside the US trade in their own currency. The portfolio is in dollars, so every price is converted at that
+   day's exchange rate (Yahoo's XXX=X: units of XXX per dollar). Pence (GBp) are pounds / 100. */
+const fx = new Map();
+async function rates(cur, signal) {
+  const hit = fx.get(cur); if (hit && Date.now() - hit.at < FRESH) return hit.p;
+  const p = (async () => {
+    const s = await yahoo(cur + '=X', '2y', signal, true);
+    if (!s?.bars?.length) throw new Error('no exchange rate for ' + cur);
+    return { days: s.bars.map((b) => [b.d, b.c]), last: s.meta.price || s.bars[s.bars.length - 1].c };
+  })();
+  fx.set(cur, { at: Date.now(), p }); p.catch(() => fx.delete(cur));
+  return p;
+}
+async function toUsd(s, signal) {
+  const cur = s.meta.currency, minor = cur === 'GBp' || cur === 'ILA' || cur === 'ZAc', base = minor ? { GBp: 'GBP', ILA: 'ILS', ZAc: 'ZAR' }[cur] : cur;
+  const R = await rates(base, signal), k = minor ? 100 : 1;
+  let j = 0, rate = R.days[0][1];
+  for (const b of s.bars) {
+    while (j < R.days.length && R.days[j][0] <= b.d) rate = R.days[j++][1];
+    const f = 1 / (rate * k);
+    b.o *= f; b.h *= f; b.l *= f; b.c *= f; b.ac *= f;
+  }
+  const f = 1 / (R.last * k);
+  if (s.meta.price != null) s.meta.price *= f;
+  if (s.meta.hi52 != null) s.meta.hi52 *= f;
+  if (s.meta.lo52 != null) s.meta.lo52 *= f;
+  s.meta.local = cur; s.meta.currency = 'USD';
+  return s;
 }
 
 async function cboe(sym, signal) {

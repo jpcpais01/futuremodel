@@ -18,6 +18,9 @@ const demo = require('./demo');
 
 const SEAT = { ...C.SEATS, ...C.OFFICERS };
 const nameOf = (k) => SEAT[k]?.name || k;
+/* Who a seat is: mandate first, then its personality. The council's Awareness sits above both, in the system prompt. */
+const who = (k) => `You are ${nameOf(k)}, the council's ${SEAT[k].role}. ${SEAT[k].mandate || ''}\n\nYour personality: ${SEAT[k].persona}`.replace('. \n', '.\n');
+
 
 /* ── Data ─────────────────────────────────────────────────────────────────── */
 async function gather({ signal, emit, settings = {} }) {
@@ -37,9 +40,9 @@ async function gather({ signal, emit, settings = {} }) {
   };
   emit({ type: 'log', text: `Reading two years of daily prices for ${U.length} names` });
   const hist = {}; let done = 0;
-  const pricesP = net.pool([...U.map((u) => u[0]), ...C.CONTEXT.map((c) => c[0])], 4, async (t) => {
+  const pricesP = net.pool([...new Set([...U.map((u) => u[0]), ...C.BENCH]), ...C.CONTEXT.map((c) => c[0])], 4, async (t) => {
     hist[t] = await prices.history(t, { signal }).catch(() => null);
-    emit({ type: 'progress', key: 'prices', label: 'Prices', done: ++done, total: U.length + C.CONTEXT.length });
+    emit({ type: 'progress', key: 'prices', label: 'Prices', done: ++done, total: new Set([...U.map((u) => u[0]), ...C.BENCH]).size + C.CONTEXT.length });
   });
   step('sec', 'SEC filings');
   const stocks = U.filter((u) => u[3] === 'S').map((u) => u[0]);
@@ -122,7 +125,7 @@ const fmtConsensus = (c) => c.slice(0, 25).map((x) => `${x.ticker} ${x.weight.to
 /* ── The session ─────────────────────────────────────────────────────────── */
 /* apply: how the decision enters the record, decided before the meeting ('now', 'open', or a date for that day's open),
    or null to leave it waiting for applyDecision() (Oazy Research asks at the end of the meeting). */
-async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'manual', emit = () => {}, signal, settings = {}, device = null, apply = 'open' }) {
+async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'manual', emit = () => {}, signal, settings = {}, device = null, apply = 'open', council = null }) {
   const cfg = C.PRESETS[preset];
   if (!cfg) throw new Error('Unknown preset ' + preset);
   const plan = C.roundPlan(rounds);
@@ -131,6 +134,8 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
   const rec = [], t0 = Date.now(), live = emit;
   emit = (e) => { if (['start', 'phase', 'turn', 'said', 'final', 'pairs'].includes(e.type) || (e.type === 'desk' && e.state !== 'reading')) rec.push({ ...e, ms: Date.now() - t0 }); live(e); };
   const s = makeSession(preset, trigger); s.device = device; s.plan = plan;
+  if (council) s.council = { id: council.id, name: council.name, awareness: council.awareness || '' };
+  const soulOf = (role) => { const b = P.soul(council, role); return b ? [b] : []; };
   const ledgerFile = s.demo ? 'demo-ledger.jsonl' : 'ledger.jsonl';
   const phases = ['data', 'analysts', 'scout', 'round1', ...plan.map((_, i) => 'debate' + (i + 1)), 'redteam', 'rebuttal', 'risk', 'chair', 'record'];
   const LABEL = { data: 'Gathering the evidence', analysts: 'The desk reads the universe', scout: 'Scout searches the web', round1: 'Opening proposals', redteam: 'The red team attacks', rebuttal: 'Rebuttals', risk: 'Risk review', chair: 'The chair decides', record: 'The decision' };
@@ -155,7 +160,7 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
     phase('analysts');
     const tickers = C.UNIVERSE.map((u) => u[0]), batches = [];
     for (let i = 0; i < tickers.length; i += cfg.analyst.batch) batches.push(tickers.slice(i, i + cfg.analyst.batch));
-    const aSystem = [{ type: 'text', text: P.ANALYST }, { type: 'text', text: macro, cache_control: { type: 'ephemeral' } }];
+    const aSystem = [{ type: 'text', text: P.ANALYST }, ...soulOf('analyst'), { type: 'text', text: macro, cache_control: { type: 'ephemeral' } }];
     let aDone = 0;
     await warmParallel(batches.map((b, bi) => async (onStart) => {
       emit({ type: 'desk', batch: bi, tickers: b, state: 'reading' });
@@ -184,7 +189,7 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
     {
       phase('scout');
       const ask = (tool, extra = '') => seatCall(s, emit, { seat: 'scout', round: 0, kind: 'scout', model: cfg.scout.model, effort: cfg.scout.effort, signal, maxTokens: 24000,
-        system: [{ type: 'text', text: P.SCOUT }], user: `Today is ${new Date().toUTCString()}. The council's universe is ${tickers.join(', ')}. Brief the council.${extra}`,
+        system: [{ type: 'text', text: P.SCOUT }, ...soulOf('scout')], user: `Today is ${new Date().toUTCString()}. The council's universe is ${tickers.join(', ')}. Brief the council.${extra}`,
         tools: [{ type: tool, name: 'web_search', max_uses: cfg.scout.searches }], mock: () => demo.scout(mockCtx) });
       const okSearches = () => s.calls.at(-1)?.usage?.web_search_ok ?? 99;
       try {
@@ -203,7 +208,7 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
     /* 4. The market book every seat reads. One shared, cached prefix. */
     const book = B.marketBook({ asOf: D.asOf, macro, scout, portfolio: B.portfolioSection(state), metrics: D.metrics, reports: s.reports, news: D.news, filings: D.filings });
     s.briefHash = sha256(book);
-    const system = [{ type: 'text', text: P.CHARTER }, { type: 'text', text: book, cache_control: { type: 'ephemeral' } }];
+    const system = [{ type: 'text', text: P.CHARTER }, ...soulOf('member'), { type: 'text', text: book, cache_control: { type: 'ephemeral' } }];
     const today = `Today is ${new Date().toUTCString()}.`;
 
     /* 5. Round 1: independent proposals. Nobody sees anyone else. */
@@ -212,7 +217,7 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
     const member = (k, round, user) => (onStart) => seatCall(s, (ev) => { if (ev.type === 'think' || ev.type === 'speak') onStart(); emit(ev); }, {
       seat: k, round, kind: 'member', model: cfg.member.model, effort: cfg.member.effort, system, user, schema: P.SCHEMA.member, signal, mock: () => demo.member(k, round, mockCtx, props),
     }).then((d) => { props[k] = d; onStart(); return d; }, (e) => { onStart(); throw e; });
-    const r1 = (k) => `${today}\n\nYou are ${nameOf(k)}, the council's ${SEAT[k].role}. ${SEAT[k].mandate}\n\nRound 1. You have not seen anyone else's view. Propose the portfolio you believe is best right now, from the whole universe, judged by your mandate. Use 5 to 15 names; weights plus cash add up to 100. Leave "responses" empty.`;
+    const r1 = (k) => `${today}\n\n${who(k)}\n\nRound 1. You have not seen anyone else's view. Propose the portfolio you believe is best right now, from the whole universe, judged by your mandate. Use 5 to 15 names; weights plus cash add up to 100. Leave "responses" empty.`;
     await settled(warmParallel(cfg.members.map((k) => member(k, 1, r1(k))), 6), s, emit);
     s.rounds.push({ key: 'round1', proposals: { ...props } });
 
@@ -222,7 +227,7 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
       const fmt = plan[r - 1], key = 'debate' + r, round = r + 1;
       phase(key);
       const snap = { ...props }, cons = fmtConsensus(rules.consensus(snap));
-      const intro = (k) => `${today}\n\nYou are ${nameOf(k)}, the council's ${SEAT[k].role}. ${SEAT[k].mandate}\n\nDebate round ${r} of ${plan.length}: ${C.FORMATS[fmt].label}.`;
+      const intro = (k) => `${today}\n\n${who(k)}\n\nDebate round ${r} of ${plan.length}: ${C.FORMATS[fmt].label}.`;
       const mine = (k) => `Your current proposal:\n${fmtProposal(k, snap[k])}`;
       const others = (k) => cast.filter((x) => x !== k).map((x) => fmtProposal(x, snap[x])).join('\n\n');
       const tail = 'Then give your revised proposal. Changing your mind for a good reason is a strength; holding firm needs evidence.';
@@ -261,13 +266,13 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
     const proposalsText = () => cfg.members.map((k) => fmtProposal(k, props[k])).join('\n\n');
     phase('redteam');
     const red = await seatCall(s, emit, { seat: 'vex', round: 0, kind: 'redteam', model: cfg.officer.model, effort: cfg.officer.effort, system, signal, schema: P.SCHEMA.redteam, mock: () => demo.redteam(mockCtx, props),
-      user: `${today}\n\nYou are Vex, the council's red team. Your only job is to find what is wrong with where the council is heading: hidden concentration, crowded trades, stale theses, valuation traps, correlated bets, missing hedges and event risk. Be specific and ruthless, but fair; an attack without evidence is noise.\n\nThe council consensus: ${fmtConsensus(rules.consensus(props))}\n\nThe seats' proposals:\n${proposalsText()}` });
+      user: `${today}\n\n${who('vex')}\n\nYour only job is to find what is wrong with where the council is heading: hidden concentration, crowded trades, stale theses, valuation traps, correlated bets, missing hedges and event risk. Be specific and ruthless, but fair; an attack without evidence is noise.\n\nThe council consensus: ${fmtConsensus(rules.consensus(props))}\n\nThe seats' proposals:\n${proposalsText()}` });
     s.redteam = red;
     phase('rebuttal');
     {
       const attacks = `${red.statement}\n` + red.attacks.map((a) => `- [${a.severity}/5] ${a.target}: ${a.argument}`).join('\n') + `\nCut: ${red.cut.map((c) => c.ticker + ' (' + c.reason + ')').join('; ')}\nKiller scenario: ${red.killer_scenario}`;
       const snap = { ...props };
-      await settled(warmParallel(cfg.members.map((k) => member(k, 90, `${today}\n\nYou are ${nameOf(k)}, the council's ${SEAT[k].role}. ${SEAT[k].mandate}\n\nThe red team attacked the council's direction:\n${attacks}\n\nYour current proposal:\n${fmtProposal(k, snap[k])}\n\nAnswer the attacks that touch your picks: defend with evidence or concede and change. Give your final proposal. Put your answers in "responses", addressed to Vex.`)), 6), s, emit);
+      await settled(warmParallel(cfg.members.map((k) => member(k, 90, `${today}\n\n${who(k)}\n\nThe red team attacked the council's direction:\n${attacks}\n\nYour current proposal:\n${fmtProposal(k, snap[k])}\n\nAnswer the attacks that touch your picks: defend with evidence or concede and change. Give your final proposal. Put your answers in "responses", addressed to Vex.`)), 6), s, emit);
       s.rounds.push({ key: 'rebuttal', proposals: { ...props } });
     }
 
@@ -275,13 +280,13 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
     phase('risk');
     const cons = rules.consensus(props);
     const risk = await seatCall(s, emit, { seat: 'sentinel', round: 0, kind: 'risk', model: cfg.officer.model, effort: cfg.officer.effort, system, signal, schema: P.SCHEMA.risk, mock: () => demo.risk(mockCtx, props),
-      user: `${today}\n\nYou are Sentinel, the council's risk manager. You protect the capital. Your vetoes and caps are binding on the chair. Standard limits already enforced by code: ${C.LIMITS.minPositions} to ${C.LIMITS.maxPositions} positions, at most ${C.LIMITS.maxStock}% in one stock or ${C.LIMITS.maxEtf}% in one ETF, at most ${C.LIMITS.maxSector}% in one sector, cash at most ${C.LIMITS.maxCash}%. Only tighten them where the evidence calls for it: excessive correlation, binary events, liquidity, accounting or governance red flags, or a regime that calls for more cash. Do not veto a name just because you would not have picked it.\n\nThe council consensus: ${fmtConsensus(cons)}\n\nThe seats' final proposals:\n${proposalsText()}${red ? `\n\nThe red team said: ${red.statement}\nAttacks: ${red.attacks.map((a) => `${a.target} [${a.severity}/5]: ${a.argument}`).join(' / ')}\nKiller scenario: ${red.killer_scenario}` : ''}` });
+      user: `${today}\n\n${who('sentinel')}\n\nYou protect the capital. Your vetoes and caps are binding on the chair. Standard limits already enforced by code: ${C.LIMITS.minPositions} to ${C.LIMITS.maxPositions} positions, at most ${C.LIMITS.maxStock}% in one stock or ${C.LIMITS.maxEtf}% in one ETF, at most ${C.LIMITS.maxSector}% in one sector, cash at most ${C.LIMITS.maxCash}%. Only tighten them where the evidence calls for it: excessive correlation, binary events, liquidity, accounting or governance red flags, or a regime that calls for more cash. Do not veto a name just because you would not have picked it.\n\nThe council consensus: ${fmtConsensus(cons)}\n\nThe seats' final proposals:\n${proposalsText()}${red ? `\n\nThe red team said: ${red.statement}\nAttacks: ${red.attacks.map((a) => `${a.target} [${a.severity}/5]: ${a.argument}`).join(' / ')}\nKiller scenario: ${red.killer_scenario}` : ''}` });
     s.risk = risk;
 
     /* 9. Chair decides. */
     phase('chair');
     const chair = await seatCall(s, emit, { seat: 'arbiter', round: 0, kind: 'chair', model: cfg.chair.model, effort: cfg.chair.effort, system, signal, schema: P.SCHEMA.chair, maxTokens: 64000, mock: () => demo.chair(mockCtx, props, risk),
-      user: `${today}\n\nYou are Arbiter, the chair of the council. You decide the portfolio the council will hold until the next session. Weigh every seat by the quality of its evidence, not by headcount; the consensus below is a reference, not a vote you must follow. Respect the risk manager's vetoes and caps. Record the dissent you overrule. For every holding, state the thesis and the exact condition that would make the council sell it. Weights plus cash must add up to 100.\n\nThe council consensus: ${fmtConsensus(cons)}\n\nThe seats' final proposals:\n${proposalsText()}${red ? `\n\nThe red team: ${red.statement}\nAttacks: ${red.attacks.map((a) => `${a.target} [${a.severity}/5]: ${a.argument}`).join(' / ')}\nCut: ${red.cut.map((c) => c.ticker).join(', ') || 'none'}. Killer scenario: ${red.killer_scenario}` : ''}\n\nThe risk manager: ${risk.statement}\nVetoes: ${risk.vetoes.map((v) => `${v.ticker} (${v.reason})`).join('; ') || 'none'}. Caps: ${risk.caps.map((c) => `${c.ticker} ≤ ${c.max_weight}%`).join('; ') || 'none'}. Minimum cash ${risk.min_cash_pct}%. Maximum per sector ${risk.max_sector_pct}%. Concerns: ${risk.concerns.join('; ') || 'none'}.` });
+      user: `${today}\n\n${who('arbiter')}\n\nYou decide the portfolio the council will hold until the next session. Weigh every seat by the quality of its evidence, not by headcount; the consensus below is a reference, not a vote you must follow. Respect the risk manager's vetoes and caps. Record the dissent you overrule. For every holding, state the thesis and the exact condition that would make the council sell it. Weights plus cash must add up to 100.\n\nThe council consensus: ${fmtConsensus(cons)}\n\nThe seats' final proposals:\n${proposalsText()}${red ? `\n\nThe red team: ${red.statement}\nAttacks: ${red.attacks.map((a) => `${a.target} [${a.severity}/5]: ${a.argument}`).join(' / ')}\nCut: ${red.cut.map((c) => c.ticker).join(', ') || 'none'}. Killer scenario: ${red.killer_scenario}` : ''}\n\nThe risk manager: ${risk.statement}\nVetoes: ${risk.vetoes.map((v) => `${v.ticker} (${v.reason})`).join('; ') || 'none'}. Caps: ${risk.caps.map((c) => `${c.ticker} ≤ ${c.max_weight}%`).join('; ') || 'none'}. Minimum cash ${risk.min_cash_pct}%. Maximum per sector ${risk.max_sector_pct}%. Concerns: ${risk.concerns.join('; ') || 'none'}.` });
 
     /* 10. Hard limits, then the ledger. */
     phase('record');

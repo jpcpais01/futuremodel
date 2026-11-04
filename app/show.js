@@ -1,4 +1,4 @@
-/* The council's presentation. A meeting is told as a show in acts: a title card for every act, the wall of 155 names
+/* The council's presentation. A meeting is told as a show in acts: a title card for every act, the wall of every name
    lighting up as the evidence arrives, the desk's verdicts flipping in, then the seats taking the stage one by one,
    each with its own living orb, its words revealed like a keynote, its picks flying in, beams to the seats it answers,
    the consensus board re-sorting itself, the red team slashing, the risk manager stamping, and the chair's ring.
@@ -12,7 +12,7 @@ const SHOW = (() => {
   const TAU = Math.PI * 2, now = () => performance.now() / 1000;
   const ACT_COLOR = { data: '#33a8ff', analysts: '#2fd6a8', scout: '#ff9f5a', round1: '#8b7bff', floor: '#8b7bff', cross: '#33c3ff', devil: '#ff6b81', duel: '#ffb547', premortem: '#ff5c7a', steelman: '#2fd6a8', closing: '#ffd76a', redteam: '#ff4d6d', rebuttal: '#ff8fa3', risk: '#dfe3f0', chair: '#ffd76a', record: '#ffd76a' };
   const ACT_SUB = {
-    data: 'Two years of prices for 155 names, SEC filings, company news, rates, credit and volatility.',
+    data: `Two years of prices for ${C.UNIVERSE.length} companies, SEC filings, company news, rates, credit and volatility.`,
     analysts: 'The research desk writes a dossier on every single name. Nothing is filtered out.',
     scout: 'Scout searches the live web for what moved markets this week and what is coming next.',
     round1: 'Eight seats. Eight mandates. Each proposes the best portfolio without seeing anyone else.',
@@ -30,10 +30,10 @@ const SHOW = (() => {
   function mark(t, s = 24) {
     t = String(t || '').toUpperCase();
     if (hasLogo(t)) return `<span class="lg" style="--s:${s}px"><img src="logos/${esc(t)}.webp" alt="" draggable="false"></span>`;
-    const k = t.length <= 2 ? .42 : t.length === 3 ? .34 : t.length === 4 ? .28 : .23;
-    return `<span class="lg tx" style="--s:${s}px;--b:${SECC[UNI[t]?.s] || '#343a55'};font-size:${Math.round(s * k * 1.05)}px">${esc(t)}</span>`;
+    const l = C.label(t), k = l.length <= 2 ? .42 : l.length === 3 ? .34 : l.length === 4 ? .28 : .23;
+    return `<span class="lg tx" style="--s:${s}px;--b:${SECC[UNI[t]?.s] || '#343a55'};font-size:${Math.round(s * k * 1.05)}px">${esc(l)}</span>`;
   }
-  const tkc = (t, w, cls = '', extra = '') => `<span class="tkc ${cls}" ${extra}>${mark(t, 24)}${esc(t)}${w == null ? '' : `<em>${(+w).toFixed(1)}%</em>`}</span>`;
+  const tkc = (t, w, cls = '', extra = '') => `<span class="tkc ${cls}" ${extra} title="${esc(UNI[t]?.n || t)}">${mark(t, 24)}${esc(C.label(t))}${w == null ? '' : `<em>${(+w).toFixed(1)}%</em>`}</span>`;
   const seatName = (k) => SEAT[k]?.name || k;
   const byName = (n) => Object.keys(SEAT).find((k) => SEAT[k].name.toLowerCase() === String(n || '').trim().toLowerCase());
   const hexRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -269,10 +269,29 @@ const SHOW = (() => {
   function diffLine(k, d) {
     const prev = prevProps[k]; if (!prev || !d?.picks) return '';
     const a = Object.fromEntries(prev.picks.map((p) => [p.ticker, +p.weight])), b = Object.fromEntries(d.picks.map((p) => [p.ticker, +p.weight])), out = [];
-    for (const t in b) if (!(t in a)) out.push(`<span class="up">+${esc(t)} ${b[t].toFixed(0)}%</span>`);
-    for (const t in a) if (!(t in b)) out.push(`<span class="dn">−${esc(t)}</span>`);
-    for (const t in b) if (t in a && Math.abs(b[t] - a[t]) >= 2) out.push(`<span class="chg">${esc(t)} ${a[t].toFixed(0)}→${b[t].toFixed(0)}%</span>`);
+    for (const t in b) if (!(t in a)) out.push(`<span class="up">+${esc(C.label(t))} ${b[t].toFixed(0)}%</span>`);
+    for (const t in a) if (!(t in b)) out.push(`<span class="dn">−${esc(C.label(t))}</span>`);
+    for (const t in b) if (t in a && Math.abs(b[t] - a[t]) >= 2) out.push(`<span class="chg">${esc(C.label(t))} ${a[t].toFixed(0)}→${b[t].toFixed(0)}%</span>`);
     return out.length ? `<span>Changed its mind:</span> ${out.slice(0, 6).join(' · ')}` : '<span>Held its position</span>';
+  }
+  /* A statement laid out to read: the first sentence is the key line, the rest short paragraphs of two sentences. */
+  function speechParas(text) {
+    const blocks = String(text || '').split(/\n\s*\n|\n(?=[-•*] )/).map((x) => x.replace(/\s+/g, ' ').trim()).filter(Boolean), out = [];
+    blocks.forEach((bl, bi) => {
+      const sent = bl.split(/(?<=[.!?]["')\]]*)\s+(?=["'(]?[A-Z0-9])/).filter(Boolean).map((x) => x + ' ');
+      if (bi === 0 && sent.length > 1) { out.push(sent.shift()); }
+      for (let i = 0; i < sent.length; i += 2) out.push(sent.slice(i, i + 2).join(''));
+    });
+    return out.map((p) => p.split(/\s+/).filter(Boolean)).filter((p) => p.length);
+  }
+  const shortWord = (w) => w.replace(/[A-Z0-9][A-Z0-9.-]*\.[A-Z]{1,3}|BRK-B/g, (t) => (UNI[t] ? C.label(t) : t));
+  const isTicker = (w) => { const t = w.replace(/^[("'$]+|[)"',.;:!?%]+$/g, '').replace(/'s$/, ''); return t in UNI; };
+  /* Keeps what is being said in view: scrolls the card gently once the text runs past its bottom edge. */
+  function follow(box, el, end) {
+    if (!box || box.scrollHeight <= box.clientHeight + 2) return;
+    const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+    if (end || r.bottom > b.bottom - b.height * .18) box.scrollTo({ top: Math.min(box.scrollHeight, box.scrollTop + (end ? r.bottom - b.bottom + 24 : r.bottom - b.bottom + b.height * .4)), behavior: 'smooth' });
+    box.classList.toggle('more', box.scrollTop + box.clientHeight < box.scrollHeight - 4);
   }
   async function playSpeech(b) {
     const k = b.seat, S = SEAT[k] || { name: k, role: '', color: '#fff' }, d = b.data || {}, seatSt = hall.seats[k];
@@ -285,8 +304,8 @@ const SHOW = (() => {
     for (const q of ALL) { hall.seats[q].tTalk = q === k ? 1 : 0; }
     const roundLbl = b.kind === 'question' ? 'Cross-examination' : b.kind === 'scout' ? 'Web research' : b.kind === 'redteam' ? 'Red team' : b.kind === 'risk' ? 'Risk ruling' : b.kind === 'chair' ? 'The decision' : curAct?.label || '';
     let text = b.kind === 'scout' ? (b.text || d.digest || '') : (d.statement || '');
-    if (b.kind === 'scout') { const words = text.replace(/[#*_>`]/g, '').replace(/\s+/g, ' ').trim().split(' '); text = words.slice(0, 70).join(' ') + (words.length > 70 ? '…' : ''); }
-    const words = text.split(/\s+/).filter(Boolean);
+    if (b.kind === 'scout') { const ws = text.replace(/[#*_>`]/g, '').replace(/[ \t]+/g, ' ').trim().split(' '); text = ws.slice(0, 130).join(' ') + (ws.length > 130 ? '…' : ''); }
+    const paras = speechParas(text), words = paras.flat();
     const extras = [];
     if (b.kind === 'question') (d.questions || []).slice(0, 3).forEach((q) => { const to = byName(q.to); extras.push(`<div class="qc">${AV.orb(to || 'arbiter', 26)}<div><b>${esc(q.to)}</b>, ${esc(q.question)}</div></div>`); if (to) hall.beam(k, to, 9000); });
     if (isMember) (d.responses || []).slice(0, 2).forEach((r) => { const to = byName(r.to); extras.push(`<div class="qc">${AV.orb(to || 'arbiter', 26)}<div><b>To ${esc(r.to)}</b>, ${esc(r.point)}</div></div>`); if (to && to !== k) hall.beam(k, to, 9000); });
@@ -294,22 +313,23 @@ const SHOW = (() => {
     let chips = '';
     if (isMember && d.picks) chips = d.picks.slice().sort((p, q) => q.weight - p.weight).slice(0, 10).map((p, i) => tkc(p.ticker, p.weight, '', `style="animation-delay:${i * 70}ms"`)).join('');
     if (b.kind === 'redteam') chips = (d.cut || []).map((c, i) => tkc(c.ticker, null, 'cut stamp', `data-s="CUT" style="animation-delay:${i * 90}ms"`)).join('');
-    if (b.kind === 'risk') chips = [...(d.vetoes || []).map((v) => tkc(v.ticker, null, 'cut stamp', 'data-s="VETO"')), ...(d.caps || []).map((c) => `<span class="tkc">${mark(c.ticker, 24)}${esc(c.ticker)}<em>≤ ${(+c.max_weight).toFixed(0)}%</em></span>`), `<span class="tkc"><span class="lg cash" style="--s:24px">$</span>Cash ≥ ${(+d.min_cash_pct || 0).toFixed(0)}%</span>`, `<span class="tkc">Sector ≤ ${(+d.max_sector_pct || 0).toFixed(0)}%</span>`].join('');
+    if (b.kind === 'risk') chips = [...(d.vetoes || []).map((v) => tkc(v.ticker, null, 'cut stamp', 'data-s="VETO"')), ...(d.caps || []).map((c) => `<span class="tkc">${mark(c.ticker, 24)}${esc(C.label(c.ticker))}<em>≤ ${(+c.max_weight).toFixed(0)}%</em></span>`), `<span class="tkc"><span class="lg cash" style="--s:24px">$</span>Cash ≥ ${(+d.min_cash_pct || 0).toFixed(0)}%</span>`, `<span class="tkc">Sector ≤ ${(+d.max_sector_pct || 0).toFixed(0)}%</span>`].join('');
     const meta = isMember ? diffLine(k, d) : b.kind === 'scout' ? '<span>Briefing shared with every seat</span>' : b.kind === 'chair' && d.confidence != null ? `<span>Confidence ${d.confidence}/100</span>` : '';
     const cap = $('#shCap');
     cap.classList.remove('on'); cap.classList.toggle('wide', !$('#shSide').classList.contains('on'));
     cap.style.setProperty('--c', S.color);
-    cap.innerHTML = `<div class="cw"><b>${esc(S.name)}</b><span>${esc(S.role)} · ${esc(roundLbl)}</span></div><div class="ct">${words.map((w) => `<span class="w${/^[A-Z]{2,5}[,.;:]?$/.test(w) ? ' key' : ''}">${esc(w)} </span>`).join('')}</div>${extras.length ? `<div class="cq hidden">${extras.join('')}</div>` : ''}${chips ? `<div class="cp hidden">${chips}</div>` : ''}${meta ? `<div class="cmeta hidden">${meta}</div>` : ''}`;
+    cap.innerHTML = `<div class="cw"><b>${esc(S.name)}</b><span>${esc(S.role)} · ${esc(roundLbl)}</span></div><div class="cbody" style="--ts:${words.length < 45 ? 1 : words.length < 80 ? .88 : words.length < 120 ? .8 : .74}"><div class="ct">${paras.map((p, i) => `<p class="${i ? '' : 'lead'}">${p.map((w) => `<span class="w${isTicker(w) ? ' key' : ''}">${esc(shortWord(w))} </span>`).join('')}</p>`).join('')}</div>${extras.length ? `<div class="cq hidden">${extras.join('')}</div>` : ''}${chips ? `<div class="cp hidden">${chips}</div>` : ''}${meta ? `<div class="cmeta hidden">${meta}</div>` : ''}</div>`;
     void cap.offsetWidth; cap.classList.add('on');
     seatSt.ripples.push(now());
     if (!(await wait(500))) { seatSt.tTalk = 0; return; }
-    const spans = cap.querySelectorAll('.w'), per = Math.max(70, Math.min(190, 9000 / Math.max(1, words.length)));
+    const spans = cap.querySelectorAll('.w'), per = Math.max(70, Math.min(190, 9000 / Math.max(1, words.length))), body = cap.querySelector('.cbody');
     for (let i = 0; i < spans.length; i++) {
       spans[i].classList.add('in');
+      if (i % 6 === 0) follow(body, spans[i]);
       if (i % 4 === 0) seatSt.ripples.push(now());
       if (!(await wait(per))) { seatSt.tTalk = 0; return; }
     }
-    for (const sel of ['.cq', '.cp', '.cmeta']) { const n = cap.querySelector(sel); if (n) { n.classList.remove('hidden'); if (!(await wait(sel === '.cq' ? 700 * Math.min(3, extras.length) : 500))) { seatSt.tTalk = 0; return; } } }
+    for (const sel of ['.cq', '.cp', '.cmeta']) { const n = cap.querySelector(sel); if (n) { n.classList.remove('hidden'); follow(body, n, true); if (!(await wait(sel === '.cq' ? 700 * Math.min(3, extras.length) : 500))) { seatSt.tTalk = 0; return; } } }
     if (isMember) renderBoard();
     await wait(1600 + Math.min(2400, words.length * 18));
     seatSt.tTalk = 0;
@@ -332,7 +352,7 @@ const SHOW = (() => {
     const cb = $('#cb'), seen = new Set();
     cons.forEach((c, i) => {
       let r = cb.querySelector(`[data-t="${CSS.escape(c.ticker)}"]`);
-      if (!r) { r = document.createElement('div'); r.className = 'cbr new'; r.dataset.t = c.ticker; r.innerHTML = `${mark(c.ticker, 24)}<b>${esc(c.ticker)}</b><span class="bar"><i style="width:0"></i></span><em></em>`; r.style.transform = `translateY(${i * 36 + 40}px)`; cb.appendChild(r); }
+      if (!r) { r = document.createElement('div'); r.className = 'cbr new'; r.dataset.t = c.ticker; r.innerHTML = `${mark(c.ticker, 24)}<b>${esc(C.label(c.ticker))}</b><span class="bar"><i style="width:0"></i></span><em></em>`; r.style.transform = `translateY(${i * 36 + 40}px)`; cb.appendChild(r); }
       seen.add(c.ticker); r.style.opacity = 1; r.style.transform = `translateY(${i * 36}px)`;
       r.querySelector('i').style.width = (c.weight / max * 100).toFixed(1) + '%'; r.querySelector('em').textContent = c.weight.toFixed(1) + '%';
       r.title = `${c.ticker}: backed by ${c.votes} seat${c.votes === 1 ? '' : 's'}`;
@@ -353,8 +373,8 @@ const SHOW = (() => {
     const tot = segs.reduce((a, s) => a + s.w, 0) || 100;
     const svgSegs = segs.map((s, i) => { const len = s.w / tot * CIRC, gap = Math.min(1.2, len * .25), off = acc; acc += len; return `<circle class="seg" cx="50" cy="50" r="${R}" fill="none" stroke="${s.c}" stroke-width="9" stroke-linecap="butt" stroke-dasharray="${Math.max(.1, len - gap)} ${CIRC}" stroke-dashoffset="${-off}" transform="rotate(-90 50 50)" style="opacity:0;transition:opacity .6s ${i * 90}ms"/>`; }).join('');
     let a0 = 0; const logos = segs.filter((s) => s.t !== 'Cash').map((s, i) => { const mid = (a0 + s.w / 2) / tot * TAU - Math.PI / 2; a0 += s.w; const rr = 47; return `<div class="lgp" style="left:${50 + Math.cos(mid) * rr}%;top:${50 + Math.sin(mid) * rr}%;animation-delay:${600 + i * 110}ms">${mark(s.t, 40)}<small>${s.w.toFixed(1)}%</small></div>`; }).join('');
-    const rows = H.map((h, i) => { const p = prev[h.ticker], tag = p == null ? '<span class="chgtag n">NEW</span>' : Math.abs(p - h.weight) >= 1 ? `<span class="chgtag u">${p.toFixed(0)}→${h.weight.toFixed(0)}%</span>` : ''; return `<div class="rw" style="animation-delay:${900 + i * 80}ms">${mark(h.ticker, 30)}<div><b>${esc(h.ticker)}</b>${tag}<small style="display:block;margin:0">${esc((h.thesis || '').slice(0, 90))}</small></div><em>${h.weight.toFixed(1)}%</em></div>`; }).join('')
-      + Object.keys(prev).filter((t) => !H.some((h) => h.ticker === t)).map((t) => `<div class="rw" style="opacity:.6">${mark(t, 30)}<div><b>${esc(t)}</b><span class="chgtag x">SOLD</span></div><em>0%</em></div>`).join('');
+    const rows = H.map((h, i) => { const p = prev[h.ticker], tag = p == null ? '<span class="chgtag n">NEW</span>' : Math.abs(p - h.weight) >= 1 ? `<span class="chgtag u">${p.toFixed(0)}→${h.weight.toFixed(0)}%</span>` : ''; return `<div class="rw" style="animation-delay:${900 + i * 80}ms">${mark(h.ticker, 30)}<div><b>${esc(C.label(h.ticker))}</b>${tag}<small style="display:block;margin:0">${esc((h.thesis || '').slice(0, 90))}</small></div><em>${h.weight.toFixed(1)}%</em></div>`; }).join('')
+      + Object.keys(prev).filter((t) => !H.some((h) => h.ticker === t)).map((t) => `<div class="rw" style="opacity:.6">${mark(t, 30)}<div><b>${esc(C.label(t))}</b><span class="chgtag x">SOLD</span></div><em>0%</em></div>`).join('');
     const fin = $('#shFinal');
     fin.innerHTML = `<div class="fin-l"><span class="kick">The chair has decided</span><h2>${H.length} holdings</h2><p>${esc(f.summary || '')}</p>${f.confidence != null ? `<div class="conf"><b id="confN">0</b><span>Confidence<br>out of 100</span></div>` : ''}</div>
       <div class="fin-ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="${R}" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="9"/>${svgSegs}</svg>${logos}<div class="mid"><b>${(100 - (+f.cash_pct || 0)).toFixed(0)}%</b><span>Invested</span></div></div>

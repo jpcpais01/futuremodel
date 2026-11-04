@@ -7,3 +7,5 @@ index/*/*
 !index/*/ledger.jsonl
 !index/*/state.json
 !index/*/sessions/
+!index/*/README.md
+!index/*/chart.svg

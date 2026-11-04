@@ -17,13 +17,13 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name)
     for (const p of Object.values(C.PRESETS)) for (const m of p.members) assert.ok(C.SEATS[m], m);
   });
   await t('limits: vetoes, caps, unknown names, weights sum to 100', () => {
-    const chair = { cash_pct: 0, holdings: [{ ticker: 'NVDA', weight: 40 }, { ticker: 'AMD', weight: 30 }, { ticker: 'FAKE', weight: 10 }, { ticker: 'SPY', weight: 20 }, { ticker: 'XLE', weight: 10 }] };
-    const risk = { vetoes: [{ ticker: 'AMD', reason: 'x' }], caps: [{ ticker: 'SPY', max_weight: 10 }], min_cash_pct: 5, max_sector_pct: 40 };
+    const chair = { cash_pct: 0, holdings: [{ ticker: 'NVDA', weight: 40 }, { ticker: 'AMD', weight: 30 }, { ticker: 'FAKE', weight: 10 }, { ticker: 'XOM', weight: 20 }, { ticker: 'JPM', weight: 10 }] };
+    const risk = { vetoes: [{ ticker: 'AMD', reason: 'x' }], caps: [{ ticker: 'XOM', max_weight: 10 }], min_cash_pct: 5, max_sector_pct: 40 };
     const r = rules.enforce(chair, risk, B.META);
     const w = Object.fromEntries(r.holdings.map((h) => [h.ticker, h.weight]));
     assert.ok(!w.AMD && !w.FAKE, 'vetoed and unknown names dropped');
     assert.ok(w.NVDA <= C.LIMITS.maxStock + 1e-9, 'single-stock cap');
-    assert.ok(w.SPY <= 10 + 1e-9, 'risk cap');
+    assert.ok(w.XOM <= 10 + 1e-9, 'risk cap');
     assert.ok(r.cash_pct >= 5 - 1e-9, 'cash floor');
     const sum = r.holdings.reduce((a, h) => a + h.weight, 0) + r.cash_pct; assert.ok(Math.abs(sum - 100) < 0.2, 'sums to 100, got ' + sum);
   });
@@ -165,8 +165,25 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name)
     let out = await indexer.build({ fetchPrices: false, prior: { sessions: [{ id: 'S-20261101-0900', status: 'skipped' }] } });
     assert.strictEqual(out.state.fills.length, 1); assert.strictEqual(out.state.positions[0].t, 'AAA'); assert.strictEqual(out.state.positions[0].entryWeight, 60);
     assert.strictEqual(out.state.sessions.length, 2, 'older meetings kept from the previous state'); assert.strictEqual(out.state.lastId, sess.id);
-    assert.ok(/council index/.test(out.readme) && out.chart.startsWith('<svg')); assert.ok(JSON.parse(out.json).verify.ok);
+    assert.ok(/^# Oazy Council · Oazy Research/.test(out.readme) && /\(ledger\.jsonl\)/.test(out.readme) && out.chart.startsWith('<svg')); assert.ok(JSON.parse(out.json).verify.ok);
     store.use(fsBackend(tmp));
+  });
+  await t('councils: the first is always there, new ones get their own folder, the Awareness reaches every role', () => {
+    const CO = require('../engine/councils'), P = require('../engine/prompts'), indexer = require('../engine/indexer');
+    let list = CO.parse(null); assert.deepStrictEqual(list.map((c) => c.id), ['council']);
+    const a = CO.make(list, { name: 'Dividend Guardians', awareness: 'Income first. Never chase.' }); assert.strictEqual(a.id, 'council-dividend-guardians'); assert.notStrictEqual(a.color, list[0].color);
+    list = CO.parse(CO.serialize([...list, a])); assert.strictEqual(list.length, 2);
+    assert.throws(() => CO.make(list, { name: 'dividend guardians', awareness: 'x' }), /already/);
+    assert.throws(() => CO.make(list, { name: 'X', awareness: ' ' }), /Awareness/);
+    assert.strictEqual(CO.make(list, { name: 'Ação & Ouro!', awareness: 'y' }).id, 'council-acao-ouro');
+    assert.strictEqual(P.soul(list[0]), null, 'no Awareness, no block');
+    for (const r of ['member', 'analyst', 'scout']) assert.ok(P.soul(a, r).text.includes('Income first. Never chase.'));
+    assert.ok(/All councils/.test(indexer.readme({ name: a.name, awareness: a.awareness, series: [], positions: [], capital: 1e5 })));
+    const root = indexer.rootReadme(list.map((c) => ({ council: c, state: null }))); assert.ok(root.includes('[Dividend Guardians](council-dividend-guardians/README.md)'));
+  });
+  await t('every seat and officer has its own personality', () => {
+    const all = { ...C.SEATS, ...C.OFFICERS }, ps = Object.values(all).map((x) => x.persona);
+    assert.ok(ps.every((p) => p && p.length > 300)); assert.strictEqual(new Set(ps).size, ps.length);
   });
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(`\n${n} passed, ${failed} failed`);
