@@ -265,9 +265,7 @@ function roundPlan(n) {
 
 /* ── Portfolio rules, enforced by code after the chair decides ───────────────── */
 const LIMITS = {
-  minPositions: 5, maxPositions: 15,
-  maxStock: 15, maxEtf: 25, minWeight: 2,      // percent of the portfolio
-  maxSector: 40, maxCash: 40,                  // percent
+  // No fixed portfolio limits: any number of holdings, any weight, any cash. Only the risk manager's rulings in a meeting bind.
   costBps: 10,                                 // assumed one-way trading cost, in basis points
   startCapital: 100000,
 };

@@ -70,7 +70,7 @@ function redteam({ D }, props) {
 }
 
 function risk() {
-  return { statement: 'No vetoes this week. Keep at least 5% cash and no sector above 35%: the top of this book is too correlated to run at the usual limits.', vetoes: [], caps: [], min_cash_pct: 5, max_sector_pct: 35, concerns: ['Correlation among the largest weights'] };
+  return { statement: 'No vetoes this week. Keep at least 5% cash and no sector above 35%: the top of this book is too correlated to run without limits.', vetoes: [], caps: [], min_cash_pct: 5, max_sector_pct: 35, concerns: ['Correlation among the largest weights'] };
 }
 
 function chair(ctx, props, rk) {
