@@ -41,10 +41,10 @@ async function gather({ signal, emit, settings = {} }) {
   };
   emit({ type: 'log', text: `Reading two years of daily prices for ${U.length} names` });
   const hist = {}; let done = 0;
-  const pricesP = net.pool([...new Set([...U.map((u) => u[0]), ...C.BENCH]), ...C.CONTEXT.map((c) => c[0])], 4, async (t) => {
+  const pricesP = net.pool([...new Set([...U.map((u) => u[0]), ...C.BENCH, ...C.CONTEXT.map((c) => c[0])])], 4, async (t) => {
     hist[t] = await prices.history(t, { signal }).catch(() => null);
     emit({ type: 'progress', key: 'prices', label: 'Prices', done: ++done, total: new Set([...U.map((u) => u[0]), ...C.BENCH]).size + C.CONTEXT.length });
-  });
+  }, signal);
   step('sec', 'SEC filings');
   const stocks = U.filter((u) => u[3] === 'S').map((u) => u[0]);
   let fund = { byTicker: {} }, filings = {};
@@ -57,6 +57,7 @@ async function gather({ signal, emit, settings = {} }) {
   const cutoff = Date.now(), news = {};
   const newsP = within(120e3, 'Company news', (sg) => newsSrc.companyNews(U, { signal: sg, cutoff, into: news, onProgress: (d, n) => emit({ type: 'progress', key: 'news', label: 'Company news', done: d, total: n }) }));
   await Promise.all([pricesP, secP, newsP]);
+  if (signal?.aborted) throw new Error('cancelled');
   health.prices = U.filter((u) => hist[u[0]]?.bars?.length > 25).length;
   health.fundamentals = Object.values(fund.byTicker).filter((x) => x && x.revTTM).length;
   health.news = Object.values(news).filter((n) => n.length).length;

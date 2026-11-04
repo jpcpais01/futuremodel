@@ -3,7 +3,7 @@
    is a finished meeting, as one commit, with the GitHub token. The Anthropic key lives in memory and is never saved. */
 'use strict';
 (() => {
-  const E = OazyEngine, C = E.C, council = E.council, gh = E.github, ledger = E.ledger, SEAT = AV.SEAT;
+  const E = OazyEngine, C = E.C, council = E.council, gh = E.github, net = E.net, ledger = E.ledger, SEAT = AV.SEAT;
   const MEMBERS = C.PRESETS.normal.members, OFFICERS = ['vex', 'sentinel', 'arbiter'];
   const UNI = Object.fromEntries(C.UNIVERSE.map((u) => [u[0], { t: u[0], n: u[1], s: u[2], k: u[3], c: u[4] }]));
   const mark = SHOW.mark, tkc = SHOW.tkc;
@@ -406,13 +406,28 @@
       <label class="lbl">GitHub (only needed to save meetings)</label>
       ${tok ? `<div class="okline">${I.ok}Connected. Meetings save to futuremodel.</div><div class="row" style="justify-content:flex-start;margin-top:12px"><button class="btn gh" id="tkChange">Change token</button><button class="link" id="tkForget">Forget it</button></div>` : ''}
       <div id="tkNew" class="${tok ? 'hidden' : ''}">
-        <ol class="steps"><li>Open the <a class="link" href="#" id="tkPage">GitHub token page</a>.</li><li>Under "Repository access" choose <b>Only select repositories</b> and pick <b>futuremodel</b>.</li><li>Under "Permissions", set <b>Contents</b> to <b>Read and write</b>. Create it, copy it, and paste it here.</li></ol>
+        <ol class="steps"><li><span>Open the <a class="link" href="#" id="tkPage">GitHub token page</a>.</span></li><li><span>Under "Repository access" choose <b>Only select repositories</b> and pick <b>futuremodel</b>.</span></li><li><span>Under "Permissions", set <b>Contents</b> to <b>Read and write</b>. Create it, copy it, and paste it here.</span></li></ol>
         <input class="field" id="tkIn" type="password" placeholder="github_pat_…" autocomplete="off" spellcheck="false" style="margin-top:14px">
         <div id="tkMsg"></div>
         <div class="row"><button class="btn pri" id="tkSave">Save token</button></div>
       </div>
+      <label class="lbl" style="margin-top:26px">SEC contact (for company filings)</label>
+      <p class="hint" style="margin-top:0">The SEC only answers apps that say who is asking. Write your name and email, for example <b>João Pais you@example.com</b>. It is kept on this device and sent only to the SEC.</p>
+      <input class="field" id="secIn" placeholder="Your name and email" autocomplete="off" spellcheck="false" value="${esc(store.get('secContact') || '')}">
+      <div id="secMsg"></div>
+      <div class="row"><button class="btn gh" id="secSave">Save and test</button></div>
       <p class="hint" style="margin-top:22px">The token is kept on this device only, locked by the system. Your Anthropic key is never saved anywhere: you paste it when you convene the council.</p>`);
     $('#tkPage', sh).onclick = (e) => { e.preventDefault(); HOST.openUrl(gh.TOKEN_PAGE); };
+    $('#secSave', sh).onclick = async () => {
+      const v = $('#secIn', sh).value.replace(/[^\x20-\x7e\u00c0-\u017f]/g, '').trim().slice(0, 120), msg = $('#secMsg', sh), b = $('#secSave', sh);
+      if (!/\S+@\S+\.\S+/.test(v)) { msg.innerHTML = '<div class="badline">Add an email address, after your name.</div>'; return; }
+      store.set('secContact', v); applySecContact();
+      b.disabled = true; msg.innerHTML = '<p class="hint"><span class="spin" style="display:inline-block;vertical-align:-3px;margin-right:8px"></span>Asking the SEC…</p>';
+      await new Promise((r) => setTimeout(r, 150));
+      try { await net.getJSON('https://data.sec.gov/submissions/CIK0000320193.json', { tries: 2, timeout: 15000 }); msg.innerHTML = `<div class="okline">${I.ok}Saved. The SEC answers now.</div>`; }
+      catch (e) { msg.innerHTML = `<div class="badline">Saved, but the SEC did not answer (${esc(e.message)}). Check the email, or try again in a few minutes.</div>`; }
+      b.disabled = false;
+    };
     const ch = $('#tkChange', sh); if (ch) ch.onclick = () => { $('#tkNew', sh).classList.remove('hidden'); ch.parentNode.remove(); $('#tkIn', sh).focus(); };
     const fg = $('#tkForget', sh); if (fg) fg.onclick = async () => { await HOST.setToken(null); toast('Token removed from this device.'); settings({ then }); };
     $('#tkSave', sh).onclick = async () => {
@@ -424,6 +439,13 @@
       closeSheet(); toast('GitHub connected.');
       if (then) then();
     };
+  }
+
+  /* The SEC wants a real name and email in every request. The page cannot set that header, so the host does,
+     with the contact João typed in Settings. The phone and the PC ASCII-clean it; accents are folded first. */
+  function applySecContact() {
+    const v = (store.get('secContact') || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '').trim();
+    if (v) { HOST.setSecContact?.(v); net.setSecContact(v); }
   }
 
   /* ── Councils ──────────────────────────────────────────────────────────── */
@@ -502,10 +524,15 @@
   }
 
   /* The live meeting: the engine runs it, the show tells it, and at the end João chooses how it enters. */
+  let unwinding = null;   // a stopped meeting still letting go of its requests
   async function start({ preset, rounds, key, rehearsal = false }) {
+    if (unwinding) { toast('Closing the last meeting…'); await Promise.race([unwinding, new Promise((r) => setTimeout(r, 8000))]); }
     const ac = new AbortController();
     let resolveS; const done = new Promise((r) => (resolveS = r));
-    running = { ac, rehearsal };
+    const me = { ac, rehearsal }; running = me;
+    const mine = () => running === me && !ac.signal.aborted;
+    // Only this meeting may talk to the show: a stopped one can still be letting go, and must never write into the next.
+    const emit = (e) => { if (mine()) SHOW.feed(e); };
     HOST.keepAwake(true);
     SHOW.open({
       live: true, title: (rehearsal ? 'Rehearsal' : 'Meeting') + (CO.name ? ' · ' + CO.name : ''),
@@ -517,7 +544,7 @@
           await saveMeeting(s, how, setSaving);
         },
       }),
-      onStop: () => confirmSheet('Stop the meeting?', rehearsal ? 'The rehearsal ends here.' : 'Nothing is saved. What the AI has used so far is already spent.', 'Stop it', () => { ac.abort(); SHOW.close(); finish(); }),
+      onStop: () => confirmSheet('Stop the meeting?', rehearsal ? 'The rehearsal ends here.' : 'Nothing is saved. What the AI has used so far is already spent.', 'Stop it', () => { ac.abort(); unwinding = run; SHOW.close(); finish(); }),
       onEarlyClose: async () => {
         if (rehearsal) { SHOW.close(); finish(); return; }
         const s = await done;
@@ -525,14 +552,21 @@
       },
       onClose: () => finish(),
     });
-    try {
-      const s = await council.convene({ preset, rounds, key, rehearsal, emit: SHOW.feed, signal: ac.signal, device: HOST.platform === 'android' ? 'Phone' : 'PC' });
-      resolveS(s);
-    } catch (e) {
-      resolveS(null);
-      if (e?.code === 'NO_KEY' || e?.status === 401) sessKey = null;
-      if (!ac.signal.aborted) console.warn(e);
-    } finally { HOST.keepAwake(false); }
+    const run = (async () => {
+      try {
+        const s = await council.convene({ preset, rounds, key, rehearsal, emit, signal: ac.signal, settings: { secContact: store.get('secContact') || '' }, device: HOST.platform === 'android' ? 'Phone' : 'PC' });
+        resolveS(s);
+      } catch (e) {
+        resolveS(null);
+        if (e?.code === 'NO_KEY' || e?.status === 401) sessKey = null;
+        if (!ac.signal.aborted) console.warn(e);
+      } finally {
+        if (running === me || !running) HOST.keepAwake(false);
+        if (unwinding === run) unwinding = null;
+      }
+    })();
+    me.run = run;
+    await run;
   }
   function finish() { running = null; HOST.keepAwake(false); load(true); }
 
@@ -647,6 +681,7 @@
 
   function boot() {
     shell();
+    applySecContact();
     calendarPill();
     S = store.get(lastKey()) || (CUR === 'council' ? store.get('last') : null);
     picker(); go('home');

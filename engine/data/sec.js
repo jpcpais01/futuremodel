@@ -124,6 +124,7 @@ async function filings(tickers, { signal, days = 45 } = {}) {
   const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
   const out = {}, periodic = {};
   await pool(tickers, 3, async (t) => {
+    if (signal?.aborted) return;
     const cik = map[t.replace('-', '.')] ?? map[t];
     if (!cik) return;
     const rel = `sec/sub/${cik}.json`;

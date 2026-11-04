@@ -137,7 +137,7 @@ const SHOW = (() => {
   const effSpeed = () => (skipping ? 40 : speed * (live && Q.length > 5 ? Math.min(3, 1 + (Q.length - 5) * .2) : 1));
 
   function open(opts = {}) {
-    cb = opts; live = !!opts.live; ended = false; Q = []; ballots = null; huntHeld = null; busy = false; props = {}; prevProps = {}; thoughts = {}; verdicts = {}; counts = {}; wallBuilt = false; acts = []; actIdx = -1; curAct = null; skipping = false; finalShown = false; beatToken++; pumpId++;
+    cb = opts; live = !!opts.live; ended = false; Q = []; ballots = null; huntHeld = null; busy = false; props = {}; prevProps = {}; thoughts = {}; verdicts = {}; counts = {}; wmMode = null; wmShown = {}; wallBuilt = false; acts = []; actIdx = -1; curAct = null; skipping = false; finalShown = false; beatToken++; pumpId++;
     cancelWaits();
     const sh = $('#show'); sh.classList.add('on'); sh.setAttribute('aria-hidden', 'false'); document.body.classList.add('showing');
     if (!hall) hall = new Hall($('#showC'), { area: (W, H) => (W < 900 ? { x0: 0, x1: W, y0: 70, y1: H * .62 } : { x0: 0, x1: W - 330, y0: 70, y1: H - 40 }) }); else hall.run || (hall = new Hall($('#showC')));
@@ -260,11 +260,11 @@ const SHOW = (() => {
   }
   function lightTiles(frac) { const tiles = document.querySelectorAll('.wt'); const n = Math.round(tiles.length * frac); tiles.forEach((t, i) => { if (i < n && !t.classList.contains('lit')) t.classList.add('lit'); }); }
   function onProgress(e) {
-    if (e.key === 'prices') { counts.prices = e.done; lightTiles(e.done / e.total); }
+    if (e.key === 'prices') { counts.prices = Math.max(counts.prices || 0, e.done); lightTiles(counts.prices / e.total); }
     else if (e.key === 'sec') counts.sec = e.label === 'SEC fundamentals' ? e.done : counts.sec || 0;
-    else if (e.key === 'news') counts.news = e.done;
+    else if (e.key === 'news') counts.news = Math.max(counts.news || 0, e.done);
     else if (e.key === 'macro') counts.macro = e.done ? 'Ready' : '…';
-    else if (e.key === 'analysts') counts.dossiers = e.done;
+    else if (e.key === 'analysts') counts.dossiers = Math.max(counts.dossiers || 0, e.done);
     renderWallMeta();
   }
   async function replayData() {
@@ -272,12 +272,37 @@ const SHOW = (() => {
     for (let i = 0; i < tiles.length; i += 6) { tiles.slice(i, i + 6).forEach((t) => t.classList.add('lit')); counts.prices = Math.min(tiles.length, i + 6); renderWallMeta(); if (!(await wait(32))) return; }
     counts.sec = '✓'; counts.news = '✓'; counts.macro = 'Ready'; renderWallMeta(); if (!(await wait(900))) return;
   }
+  /* The counters under the wall. The boxes are built once per mode and only their numbers change, so they never
+     re-animate or flash; a number glides up to its new value instead of jumping. */
+  let wmMode = null, wmShown = {}, wmRaf = 0;
   function renderWallMeta() {
     const m = $('#wallMeta'); if (!m) return;
+    const mode = curAct?.key === 'analysts' ? 'desk' : 'data';
     const v = Object.values(verdicts), n = (k) => v.filter((x) => x === k).length;
-    m.innerHTML = curAct?.key === 'analysts'
-      ? ['strong_buy', 'buy', 'hold', 'avoid', 'strong_avoid'].map((k) => `<div class="wm"><b style="color:${VCOL[k]}">${n(k)}</b><span>${VLAB[k]}</span></div>`).join('')
-      : `<div class="wm"><b>${counts.prices ?? 0}</b><span>Price histories</span></div><div class="wm"><b>${counts.sec ?? '…'}</b><span>SEC fundamentals</span></div><div class="wm"><b>${counts.news ?? '…'}</b><span>News feeds</span></div><div class="wm"><b>${counts.macro ?? '…'}</b><span>Rates and macro</span></div>`;
+    const rows = mode === 'desk'
+      ? ['strong_buy', 'buy', 'hold', 'avoid', 'strong_avoid'].map((k) => [k, VLAB[k], n(k), VCOL[k]])
+      : [['prices', 'Price histories', counts.prices ?? 0], ['sec', 'SEC fundamentals', counts.sec ?? '…'], ['news', 'News feeds', counts.news ?? '…'], ['macro', 'Rates and macro', counts.macro ?? '…']];
+    if (wmMode !== mode || !m.querySelector('.wm')) {
+      wmMode = mode; wmShown = {};
+      m.innerHTML = rows.map(([k, label, , col]) => `<div class="wm" data-k="${k}"><b${col ? ` style="color:${col}"` : ''}></b><span>${label}</span></div>`).join('');
+    }
+    rows.forEach(([k, , val]) => {
+      const b = m.querySelector(`.wm[data-k="${k}"] b`); if (!b) return;
+      b.dataset.to = val;
+      if (typeof val !== 'number') { b.textContent = val; wmShown[k] = null; }
+      else if (wmShown[k] == null || val < wmShown[k]) { wmShown[k] = val; b.textContent = val; }
+    });
+    if (!wmRaf) wmRaf = requestAnimationFrame(tickWallMeta);
+  }
+  function tickWallMeta() {
+    wmRaf = 0; const m = $('#wallMeta'); if (!m) return; let more = false;
+    m.querySelectorAll('.wm').forEach((w) => {
+      const k = w.dataset.k, b = w.querySelector('b'), to = +b.dataset.to;
+      if (!Number.isFinite(to) || wmShown[k] == null || wmShown[k] >= to) return;
+      wmShown[k] = Math.min(to, wmShown[k] + Math.max(1, Math.ceil((to - wmShown[k]) * 0.18)));
+      b.textContent = wmShown[k]; if (wmShown[k] < to) more = true;
+    });
+    if (more) wmRaf = requestAnimationFrame(tickWallMeta);
   }
   async function playDesk(e) {
     if (!wallBuilt) buildWall();
