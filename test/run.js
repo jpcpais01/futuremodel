@@ -22,10 +22,15 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ok  ' + name)
     const r = rules.enforce(chair, risk, B.META);
     const w = Object.fromEntries(r.holdings.map((h) => [h.ticker, h.weight]));
     assert.ok(!w.AMD && !w.FAKE, 'vetoed and unknown names dropped');
-    assert.ok(w.NVDA <= C.LIMITS.maxStock + 1e-9, 'single-stock cap');
     assert.ok(w.XOM <= 10 + 1e-9, 'risk cap');
     assert.ok(r.cash_pct >= 5 - 1e-9, 'cash floor');
     const sum = r.holdings.reduce((a, h) => a + h.weight, 0) + r.cash_pct; assert.ok(Math.abs(sum - 100) < 0.2, 'sums to 100, got ' + sum);
+  });
+  await t('no fixed limits: any number of holdings and any weight survive', () => {
+    const names = C.UNIVERSE.slice(0, 30).map((u) => u[0]);
+    const chair = { cash_pct: 0, holdings: [{ ticker: names[0], weight: 60 }, ...names.slice(1).map((t) => ({ ticker: t, weight: 40 / 29 }))] };
+    const r = rules.enforce(chair, { vetoes: [], caps: [], min_cash_pct: 0, max_sector_pct: 100 }, B.META);
+    assert.strictEqual(r.holdings.length, 30); assert.ok(Math.abs(r.holdings[0].weight - 60) < 0.01); assert.ok(r.cash_pct < 0.05);
   });
   await t('consensus averages every seat, nothing dropped', () => {
     const c = rules.consensus({ a: { picks: [{ ticker: 'X', weight: 10 }] }, b: { picks: [{ ticker: 'Y', weight: 20 }] } });

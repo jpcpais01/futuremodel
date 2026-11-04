@@ -217,7 +217,7 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
     const member = (k, round, user) => (onStart) => seatCall(s, (ev) => { if (ev.type === 'think' || ev.type === 'speak') onStart(); emit(ev); }, {
       seat: k, round, kind: 'member', model: cfg.member.model, effort: cfg.member.effort, system, user, schema: P.SCHEMA.member, signal, mock: () => demo.member(k, round, mockCtx, props),
     }).then((d) => { props[k] = d; onStart(); return d; }, (e) => { onStart(); throw e; });
-    const r1 = (k) => `${today}\n\n${who(k)}\n\nRound 1. You have not seen anyone else's view. Propose the portfolio you believe is best right now, from the whole universe, judged by your mandate. Use 5 to 15 names; weights plus cash add up to 100. Leave "responses" empty.`;
+    const r1 = (k) => `${today}\n\n${who(k)}\n\nRound 1. You have not seen anyone else's view. Propose the portfolio you believe is best right now, from the whole universe, judged by your mandate. Hold as many or as few names as you judge best, at any weights; weights plus cash add up to 100. Leave "responses" empty.`;
     await settled(warmParallel(cfg.members.map((k) => member(k, 1, r1(k))), 6), s, emit);
     s.rounds.push({ key: 'round1', proposals: { ...props } });
 
@@ -280,7 +280,7 @@ async function run({ preset = 'normal', rounds = C.ROUNDS.default, trigger = 'ma
     phase('risk');
     const cons = rules.consensus(props);
     const risk = await seatCall(s, emit, { seat: 'sentinel', round: 0, kind: 'risk', model: cfg.officer.model, effort: cfg.officer.effort, system, signal, schema: P.SCHEMA.risk, mock: () => demo.risk(mockCtx, props),
-      user: `${today}\n\n${who('sentinel')}\n\nYou protect the capital. Your vetoes and caps are binding on the chair. Standard limits already enforced by code: ${C.LIMITS.minPositions} to ${C.LIMITS.maxPositions} positions, at most ${C.LIMITS.maxStock}% in one stock or ${C.LIMITS.maxEtf}% in one ETF, at most ${C.LIMITS.maxSector}% in one sector, cash at most ${C.LIMITS.maxCash}%. Only tighten them where the evidence calls for it: excessive correlation, binary events, liquidity, accounting or governance red flags, or a regime that calls for more cash. Do not veto a name just because you would not have picked it.\n\nThe council consensus: ${fmtConsensus(cons)}\n\nThe seats' final proposals:\n${proposalsText()}${red ? `\n\nThe red team said: ${red.statement}\nAttacks: ${red.attacks.map((a) => `${a.target} [${a.severity}/5]: ${a.argument}`).join(' / ')}\nKiller scenario: ${red.killer_scenario}` : ''}` });
+      user: `${today}\n\n${who('sentinel')}\n\nYou protect the capital. Your vetoes and caps are binding on the chair. There are no fixed limits: any number of holdings, any weight, any amount of cash. Your rulings are the only limits on the chair, so set them only where the evidence calls for it: excessive correlation, binary events, liquidity, accounting or governance red flags, or a regime that calls for more cash. Do not veto a name just because you would not have picked it.\n\nThe council consensus: ${fmtConsensus(cons)}\n\nThe seats' final proposals:\n${proposalsText()}${red ? `\n\nThe red team said: ${red.statement}\nAttacks: ${red.attacks.map((a) => `${a.target} [${a.severity}/5]: ${a.argument}`).join(' / ')}\nKiller scenario: ${red.killer_scenario}` : ''}` });
     s.risk = risk;
 
     /* 9. Chair decides. */
