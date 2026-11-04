@@ -1,20 +1,35 @@
 # Oazy Research
 
-One app that holds several portfolios, each judged against the S&P 500 and the Nasdaq-100.
+Two portfolios, kept as **paper indexes** in this repository and judged against the S&P 500 (SPY) and the Nasdaq-100 (QQQ).
 
-| Portfolio | What it is | Where it trades |
-|---|---|---|
-| **Core v1.0** | A hand-built book of AI, regime and hedge positions with fixed rotation rules | Live, on Hyperliquid (read only: the app never trades) |
-| **Council** | A council of Claude agents that reads 155 names every week, debates, and holds what it judges the best portfolio | A paper index in a hash-chained ledger, entered at the open of each decision's trading day |
+| Portfolio | What it is |
+|---|---|
+| **Core v1.0** | A hand-built book of AI, regime and hedge positions. Its holdings are in [`index/core/book.json`](index/core/book.json). |
+| **Council** | A council of Claude agents that reads 155 names every week, debates, and holds what it judges the best portfolio. |
 
-Switch between them with the portfolio button next to the Oazy logo.
+Both entered at the 09:30 New York open on 3 November 2026. Nothing here trades or checks a broker account.
+
+**See how they are doing now: [`index/`](index)** (a table and a chart, rebuilt by GitHub).
+
+## How it runs
+
+Everything happens here on GitHub, so no computer needs to stay on.
+
+- **Update the indexes** ([`.github/workflows/index.yml`](.github/workflows/index.yml)): every hour while the US market is open and twice after the close, GitHub fetches free prices, values both indexes and commits the result to `index/`.
+- **Council meeting** ([`.github/workflows/council.yml`](.github/workflows/council.yml)): every Monday before the open, the council meets and its decision enters at that day's open. It needs your Anthropic key once, as a repository secret named `ANTHROPIC_API_KEY` (Settings, Secrets and variables, Actions). You can also run it by hand from the Actions tab and pick a budget.
+- **Rotating Core**: edit `index/core/book.json` on GitHub (the weights are percentages). The next update records the rotation, entered at the next open.
+
+## The apps
+
+The apps only **read** `index/` from this repository. There is nothing to sign in to or set up.
+
+- **Windows**: `OazyResearch.exe` (portable) or `OazyResearchSetup.exe` (installs it as the Start menu app). See [`research/`](research).
+- **Android**: [`council/release/OazyResearch.apk`](council/release/OazyResearch.apk).
 
 ```
-research/   Oazy Research for Windows (Electron): both portfolios, one window
-council/    the council engine (shared), the Android app, the command line and the tests
+index/      the two indexes: ledgers, current state, council sessions, and the README and chart GitHub rebuilds
+research/   the Windows app (Electron)
+council/    the council engine and the index updater (Node), the Android app, and the tests
 ```
-
-- Run or build the desktop app: [`research/README.md`](research/README.md)
-- How the council works, the phone app and account sync: [`council/README.md`](council/README.md)
 
 This is a research tool and a paper-trading record, not financial advice.

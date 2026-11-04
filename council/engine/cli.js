@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// Command line for the council, for scheduled runs without the app open.
-//   node engine/cli.js session [--preset low|normal|high] [--demo]
-//   node engine/cli.js watch [--demo]       daily check of every holding
-//   node engine/cli.js status               the paper portfolio and its record
+// Command line for the council and the indexes. GitHub runs it on a schedule (.github/workflows).
+//   node engine/cli.js update               rebuild both indexes in ../index from their ledgers and fresh prices
+//   node engine/cli.js session [--preset low|normal|high] [--demo] [--device NAME]
+//   node engine/cli.js status               the council's paper portfolio and its record
 //   node engine/cli.js estimate             cost per session for each preset
-//   node engine/cli.js verify               check the ledger's hash chain
+//   node engine/cli.js verify               check the council ledger's hash chain
 'use strict';
 const C = require('./config');
 const llm = require('./llm');
@@ -17,7 +17,10 @@ const args = process.argv.slice(2), cmd = args[0] || 'help';
 const opt = (k, d) => { const i = args.indexOf('--' + k); return i >= 0 ? args[i + 1] : d; };
 const flag = (k) => args.includes('--' + k);
 if (flag('demo')) llm.setMock(true);
-const settings = store.readJSON('settings.json', {});
+const INDEX = require('path').resolve(__dirname, '..', '..', 'index');
+// Sessions write straight into the repository's council index, unless a data folder is given.
+if (!process.env.OAZY_COUNCIL_DATA) store.setRoot(require('path').join(INDEX, 'council'));
+const settings = { ...store.readJSON('settings.json', {}), ...(opt('device') ? { device: opt('device') } : {}) };
 
 function printer() {
   let speaking = null;
@@ -38,10 +41,8 @@ function printer() {
     const preset = opt('preset', settings.preset || 'normal');
     console.log(`Convening the council (${C.PRESETS[preset].label}${llm.isMock() ? ', demo' : ''}). Estimated cost $${session.estimate(preset).mid.toFixed(2)}.`);
     await session.run({ preset, trigger: opt('trigger', 'cli'), emit: printer(), settings });
-  } else if (cmd === 'watch') {
-    const w = await require('./watch').run({ emit: () => {} });
-    console.log(w.skipped || `${w.statement}\n` + (w.alerts || []).map((a) => `  ${a.triggered ? 'ALERT' : 'ok   '} ${a.ticker}: ${a.reason}`).join('\n') + `\nConvene: ${w.convene}. Cost $${(w.cost || 0).toFixed(3)}.`);
-    if (w.convene && settings.autoEmergency && !llm.isMock()) await session.run({ preset: settings.preset || 'normal', trigger: 'emergency', emit: printer(), settings });
+  } else if (cmd === 'update') {
+    await require('./indexer').updateAll(opt('dir', INDEX), { log: (m) => console.log(m) });
   } else if (cmd === 'estimate') {
     for (const k of Object.keys(C.PRESETS)) { const e = session.estimate(k); console.log(`${C.PRESETS[k].label.padEnd(7)} ~$${e.mid.toFixed(2)} per session (range $${e.low.toFixed(2)}–$${e.high.toFixed(2)}), ${e.calls} model calls. ${C.PRESETS[k].blurb}`); }
   } else if (cmd === 'status') {

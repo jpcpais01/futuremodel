@@ -1,33 +1,29 @@
-# Oazy Research (desktop)
+# Oazy Research for Windows
 
-The Windows app. One frameless window, two portfolios:
+One window with both portfolios, Core v1.0 and the Council. Switch between them with the button next to the Oazy logo.
 
-- **Core v1.0** (`app/index.html`): the live Hyperliquid book. Home rail, Holdings, Performance, Market, Outlook.
-- **Council** (`app/council.html`): the AI council's paper portfolio. Home rail, Holdings, Performance, the Council chamber (live sessions and replays), Sessions, Settings.
-
-The council engine runs in the main process (`main.js`), on the same data folder the council has always used (`%APPDATA%\Oazy Council\data`). The Anthropic key and the sync token are encrypted with Windows' own protection (`safeStorage`) and never leave the PC.
+The app only reads the indexes from GitHub (`https://raw.githubusercontent.com/jpcpais01/futuremodel/main/index/`). It keeps a copy on disk, so it opens instantly and still shows the last state when offline. It has no keys, no accounts and no settings.
 
 ## Run and build
 
-You need Node.js 20 or newer, and `../council` next to this folder (the engine is copied from there).
+You need Node.js 20 or newer.
 
 ```powershell
 npm install
-npm start                 # copies ../council/engine, builds the pages, opens the app
-npm run dist              # dist\OazyResearch.exe (portable) and dist\OazyResearchSetup.exe (installs and updates the Start menu app)
+npm start          # opens the app
+npm run dist       # dist\OazyResearch.exe (portable) and dist\OazyResearchSetup.exe (installs and updates the Start menu app)
 ```
 
-`F11` toggles full screen. `Tab` moves between pages, `1` to `5` jump to one.
+The file names never change, so the Oazy launcher always finds the app. Run `OazyResearchSetup.exe` once after a new build to update the installed app.
+
+`F11` toggles full screen. To look at a local `index/` folder instead of GitHub, start it with `OAZY_INDEX_DIR=..\index`.
 
 ## Files
 
 ```
-main.js, preload.js        the window, tray, the council's schedule and its IPC
-app/index.html             Core v1.0, built from tools/index.src.html and tools/plan.js (plan.js and this page stay on the PC, not in git)
-app/oazy.css, oazy-kit.js  the shared look, sky and chart (built from tools/index.src.html)
-app/council.*              the Council portfolio's pages
-app/cx/                    ticker logos for the council's 155 names
-tools/build_app.js         builds app/index.html, oazy.css and oazy-kit.js
-tools/plan.example.js      Core's book without the tracked wallet address, used when tools/plan.js is absent
-tools/sync_engine.js       copies ../council/engine into engine/
+main.js, preload.js      the window and the read-only connection to the repository
+app/index.html, app.js   the pages: Home, Holdings, Performance, and for the Council the chamber (replays) and Sessions
+app/app.css              their look, on top of app/oazy.css and app/oazy-kit.js (the shared look, sky and chart)
+app/cx/                  ticker logos
+tools/                   the artwork and the Oazy launcher entry
 ```

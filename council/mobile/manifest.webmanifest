@@ -1,1 +1,1 @@
-{ "name": "Oazy Council", "short_name": "Council", "start_url": "./", "display": "standalone", "background_color": "#06070c", "theme_color": "#06070c", "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png" }] }
+{ "name": "Oazy Research", "short_name": "Oazy", "start_url": "./", "display": "standalone", "background_color": "#06070c", "theme_color": "#06070c", "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png" }] }

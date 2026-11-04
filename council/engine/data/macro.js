@@ -1,6 +1,6 @@
-// Macro inputs: FRED series (free, no key), CBOE volatility indexes, and Hyperliquid's tradable list.
+// Macro inputs: FRED series (free, no key) and CBOE volatility indexes.
 'use strict';
-const { get, getJSON, postJSON, pool } = require('../net');
+const { get, getJSON, pool } = require('../net');
 const store = require('../store');
 
 async function fredSeries(id, signal) {
@@ -42,20 +42,4 @@ async function vol({ signal } = {}) {
   return out;
 }
 
-/* Which tickers can actually be traded as perps on Hyperliquid (trade.xyz and para dexes). Display only. */
-async function hyperliquid({ signal } = {}) {
-  const rel = 'hl.json';
-  const c = store.readJSON(rel);
-  if (c && store.age(rel) < 864e5) return c;
-  const out = {};
-  for (const dex of ['xyz', 'para']) {
-    try {
-      const m = await postJSON('https://api.hyperliquid.xyz/info', { type: 'meta', dex }, { signal, tries: 2 });
-      m.universe.forEach((u) => { if (!u.isDelisted) { const t = u.name.split(':')[1]; if (!out[t]) out[t] = u.name; } });
-    } catch (e) { if (signal?.aborted) throw e; }
-  }
-  if (Object.keys(out).length) store.writeJSON(rel, out);
-  return Object.keys(out).length ? out : c || {};
-}
-
-module.exports = { fred, vol, hyperliquid, changes };
+module.exports = { fred, vol, changes };
