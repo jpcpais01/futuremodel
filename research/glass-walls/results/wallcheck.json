@@ -1,0 +1,62 @@
+{
+ "BTCUSDT": {
+  "real": {
+   "reflect": 0.5092,
+   "n": 38745
+  },
+  "fake": {
+   "reflect": 0.5163,
+   "n": 40097
+  },
+  "strong_only": {
+   "real": {
+    "reflect": 0.5042,
+    "n": 26194
+   },
+   "fake": {
+    "reflect": 0.5169,
+    "n": 27405
+   }
+  }
+ },
+ "ETHUSDT": {
+  "real": {
+   "reflect": 0.5235,
+   "n": 38846
+  },
+  "fake": {
+   "reflect": 0.5304,
+   "n": 40630
+  },
+  "strong_only": {
+   "real": {
+    "reflect": 0.5182,
+    "n": 26783
+   },
+   "fake": {
+    "reflect": 0.5328,
+    "n": 28335
+   }
+  }
+ },
+ "SOLUSDT": {
+  "real": {
+   "reflect": 0.5211,
+   "n": 41046
+  },
+  "fake": {
+   "reflect": 0.5295,
+   "n": 41932
+  },
+  "strong_only": {
+   "real": {
+    "reflect": 0.5152,
+    "n": 28067
+   },
+   "fake": {
+    "reflect": 0.5295,
+    "n": 29117
+   }
+  }
+ }
+}
