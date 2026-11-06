@@ -1,0 +1,347 @@
+{
+ "glass_check": {
+  "all walls": {
+   "year1": {
+    "real": 51.0,
+    "fake": 51.4,
+    "extra_bounce": -0.44,
+    "hits": 162483
+   },
+   "year2": {
+    "real": 51.8,
+    "fake": 52.4,
+    "extra_bounce": -0.67,
+    "hits": 162426
+   }
+  },
+  "swing levels (3+ rejections)": {
+   "year1": {
+    "real": 50.5,
+    "fake": 51.2,
+    "extra_bounce": -0.69,
+    "hits": 59741
+   },
+   "year2": {
+    "real": 51.2,
+    "fake": 52.2,
+    "extra_bounce": -0.93,
+    "hits": 61779
+   }
+  },
+  "round numbers (major)": {
+   "year1": {
+    "real": 49.3,
+    "fake": 52.3,
+    "extra_bounce": -3.08,
+    "hits": 14443
+   },
+   "year2": {
+    "real": 51.4,
+    "fake": 52.1,
+    "extra_bounce": -0.73,
+    "hits": 19505
+   }
+  },
+  "VWAP": {
+   "year1": {
+    "real": 49.7,
+    "fake": 50.6,
+    "extra_bounce": -0.89,
+    "hits": 20575
+   },
+   "year2": {
+    "real": 50.3,
+    "fake": 52.4,
+    "extra_bounce": -2.07,
+    "hits": 22066
+   }
+  },
+  "prior day/week high-low": {
+   "year1": {
+    "real": 49.5,
+    "fake": 51.0,
+    "extra_bounce": -1.52,
+    "hits": 20805
+   },
+   "year2": {
+    "real": 50.6,
+    "fake": 52.8,
+    "extra_bounce": -2.14,
+    "hits": 22085
+   }
+  },
+  "high volume node (top 20%)": {
+   "year1": {
+    "real": 50.5,
+    "fake": 50.9,
+    "extra_bounce": -0.48,
+    "hits": 30666
+   },
+   "year2": {
+    "real": 50.9,
+    "fake": 52.0,
+    "extra_bounce": -1.06,
+    "hits": 33847
+   }
+  },
+  "crowded (3+ walls close)": {
+   "year1": {
+    "real": 51.3,
+    "fake": 51.8,
+    "extra_bounce": -0.59,
+    "hits": 20771
+   },
+   "year2": {
+    "real": 51.7,
+    "fake": 52.4,
+    "extra_bounce": -0.68,
+    "hits": 20115
+   }
+  },
+  "alone (no wall close)": {
+   "year1": {
+    "real": 50.6,
+    "fake": 51.0,
+    "extra_bounce": -0.4,
+    "hits": 26088
+   },
+   "year2": {
+    "real": 51.3,
+    "fake": 52.3,
+    "extra_bounce": -0.92,
+    "hits": 27454
+   }
+  },
+  "slow approach (bottom third)": {
+   "year1": {
+    "real": 48.5,
+    "fake": 48.6,
+    "extra_bounce": -0.09,
+    "hits": 53228
+   },
+   "year2": {
+    "real": 50.3,
+    "fake": 50.5,
+    "extra_bounce": -0.21,
+    "hits": 55788
+   }
+  },
+  "fast approach (top third)": {
+   "year1": {
+    "real": 52.6,
+    "fake": 53.2,
+    "extra_bounce": -0.61,
+    "hits": 55578
+   },
+   "year2": {
+    "real": 53.3,
+    "fake": 54.1,
+    "extra_bounce": -0.84,
+    "hits": 51715
+   }
+  },
+  "quiet market (low vol)": {
+   "year1": {
+    "real": 51.2,
+    "fake": 51.3,
+    "extra_bounce": -0.12,
+    "hits": 54499
+   },
+   "year2": {
+    "real": 51.5,
+    "fake": 51.9,
+    "extra_bounce": -0.43,
+    "hits": 54113
+   }
+  },
+  "busy market (high vol)": {
+   "year1": {
+    "real": 51.0,
+    "fake": 51.7,
+    "extra_bounce": -0.75,
+    "hits": 53759
+   },
+   "year2": {
+    "real": 51.8,
+    "fake": 52.6,
+    "extra_bounce": -0.8,
+    "hits": 54190
+   }
+  },
+  "strong + slow + quiet": {
+   "year1": {
+    "real": 48.6,
+    "fake": 48.4,
+    "extra_bounce": 0.23,
+    "hits": 7583
+   },
+   "year2": {
+    "real": 49.3,
+    "fake": 49.3,
+    "extra_bounce": -0.0,
+    "hits": 8173
+   }
+  }
+ },
+ "sim": {
+  "kappa_skill_year1": {
+   "0.5": 0.099,
+   "1": 0.091,
+   "2": 0.094,
+   "4": 0.085,
+   "8": 0.089
+  },
+  "chosen_kappa": 0.5,
+  "year2": {
+   "BTCUSDT": {
+    "hours": 8759,
+    "skill_vs_coinflip_pct": -0.173,
+    "hit": 0.4943,
+    "big_calls": 1669,
+    "big_hit": 0.4871,
+    "big_gross_bps": -0.47,
+    "big_t": -0.41,
+    "net_bps_4": -4.47,
+    "net_bps_10": -10.47
+   },
+   "ETHUSDT": {
+    "hours": 8759,
+    "skill_vs_coinflip_pct": -0.188,
+    "hit": 0.4947,
+    "big_calls": 1673,
+    "big_hit": 0.4806,
+    "big_gross_bps": -1.47,
+    "big_t": -0.96,
+    "net_bps_4": -5.47,
+    "net_bps_10": -11.47
+   },
+   "SOLUSDT": {
+    "hours": 8759,
+    "skill_vs_coinflip_pct": -0.225,
+    "hit": 0.4823,
+    "big_calls": 1685,
+    "big_hit": 0.4843,
+    "big_gross_bps": -1.35,
+    "big_t": -0.8,
+    "net_bps_4": -5.35,
+    "net_bps_10": -11.35
+   },
+   "ALL": {
+    "hours": 26277,
+    "skill_vs_coinflip_pct": -0.195,
+    "hit": 0.4904,
+    "big_calls": 5027,
+    "big_hit": 0.484,
+    "big_gross_bps": -1.1,
+    "big_t": -1.29,
+    "net_bps_4": -5.1,
+    "net_bps_10": -11.1
+   }
+  }
+ },
+ "direct": {
+  "weights": {
+   "const": 0.0072,
+   "glass_above_minus_below": -0.0749,
+   "nearest_above": 0.0019,
+   "nearest_below": 0.0124,
+   "walls_above_minus_below": 0.0526,
+   "last_hour_move": -0.0401,
+   "vol_ratio": 0.0335
+  },
+  "year2": {
+   "BTCUSDT": {
+    "hours": 8759,
+    "skill_vs_coinflip_pct": 0.186,
+    "hit": 0.5219,
+    "big_calls": 1755,
+    "big_hit": 0.5236,
+    "big_gross_bps": -1.6,
+    "big_t": -1.17,
+    "net_bps_4": -5.6,
+    "net_bps_10": -11.6
+   },
+   "ETHUSDT": {
+    "hours": 8759,
+    "skill_vs_coinflip_pct": 0.091,
+    "hit": 0.5128,
+    "big_calls": 1499,
+    "big_hit": 0.533,
+    "big_gross_bps": -1.57,
+    "big_t": -0.76,
+    "net_bps_4": -5.57,
+    "net_bps_10": -11.57
+   },
+   "SOLUSDT": {
+    "hours": 8759,
+    "skill_vs_coinflip_pct": 0.124,
+    "hit": 0.5165,
+    "big_calls": 1827,
+    "big_hit": 0.5194,
+    "big_gross_bps": -2.15,
+    "big_t": -1.11,
+    "net_bps_4": -6.15,
+    "net_bps_10": -12.15
+   },
+   "ALL": {
+    "hours": 26277,
+    "skill_vs_coinflip_pct": 0.134,
+    "hit": 0.5171,
+    "big_calls": 5081,
+    "big_hit": 0.5249,
+    "big_gross_bps": -1.79,
+    "big_t": -1.72,
+    "net_bps_4": -5.79,
+    "net_bps_10": -11.79
+   }
+  }
+ },
+ "direct_walls_only": {
+  "year2": {
+   "BTCUSDT": {
+    "hours": 8759,
+    "skill_vs_coinflip_pct": 0.193,
+    "hit": 0.517,
+    "big_calls": 1920,
+    "big_hit": 0.5307,
+    "big_gross_bps": -0.51,
+    "big_t": -0.42,
+    "net_bps_4": -4.51,
+    "net_bps_10": -10.51
+   },
+   "ETHUSDT": {
+    "hours": 8759,
+    "skill_vs_coinflip_pct": 0.112,
+    "hit": 0.5124,
+    "big_calls": 1388,
+    "big_hit": 0.5375,
+    "big_gross_bps": 0.47,
+    "big_t": 0.24,
+    "net_bps_4": -3.53,
+    "net_bps_10": -9.53
+   },
+   "SOLUSDT": {
+    "hours": 8759,
+    "skill_vs_coinflip_pct": 0.098,
+    "hit": 0.5176,
+    "big_calls": 1870,
+    "big_hit": 0.5166,
+    "big_gross_bps": -2.03,
+    "big_t": -1.09,
+    "net_bps_4": -6.03,
+    "net_bps_10": -12.03
+   },
+   "ALL": {
+    "hours": 26277,
+    "skill_vs_coinflip_pct": 0.134,
+    "hit": 0.5157,
+    "big_calls": 5178,
+    "big_hit": 0.5274,
+    "big_gross_bps": -0.79,
+    "big_t": -0.82,
+    "net_bps_4": -4.79,
+    "net_bps_10": -10.79
+   }
+  }
+ }
+}
