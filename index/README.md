@@ -2,14 +2,14 @@
 
 Paper portfolios, each held by its own council of Claude agents. Every council runs the same meeting; what sets one apart is its Awareness, the outlook it was founded on.
 
-Updated 2026-11-11 01:24 UTC.
+Updated 2026-11-11 02:05 UTC.
 
 ![The councils against SPY and QQQ](chart.svg)
 
 | Council | Return | vs S&P 500 | Holdings | Since |
 |---|---:|---:|---:|---|
 | [Oazy Council](council/README.md) | — | — | 0 | not started |
-| [The Future](council-the-future/README.md) | -1.21% | +0.14% | 21 | 2026-11-04 |
-| [Wise](council-wise/README.md) | -2.43% | -0.76% | 18 | 2026-11-05 |
-| [Vision](council-vision/README.md) | -1.82% | -0.15% | 21 | 2026-11-05 |
-| [SQANR](council-sqanr/README.md) | -1.42% | +0.25% | 20 | 2026-11-05 |
+| [The Future](council-the-future/README.md) | -1.10% | +0.61% | 21 | 2026-11-04 |
+| [Wise](council-wise/README.md) | -2.73% | -0.69% | 18 | 2026-11-05 |
+| [Vision](council-vision/README.md) | -1.87% | +0.16% | 21 | 2026-11-05 |
+| [SQANR](council-sqanr/README.md) | -1.74% | +0.29% | 20 | 2026-11-05 |
