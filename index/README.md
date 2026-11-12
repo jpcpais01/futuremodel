@@ -2,7 +2,7 @@
 
 Paper portfolios, each held by its own council of Claude agents. Every council runs the same meeting; what sets one apart is its Awareness, the outlook it was founded on.
 
-Updated 2026-11-12 02:02 UTC.
+Updated 2026-11-12 02:26 UTC.
 
 ![The councils against SPY and QQQ](chart.svg)
 
