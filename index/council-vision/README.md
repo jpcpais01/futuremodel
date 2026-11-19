@@ -4,13 +4,13 @@
 
 A paper portfolio held by a council of Claude agents. Each decision enters when it is applied (at that moment's prices, or at a chosen 09:30 New York open), and holdings drift with prices until the next meeting. Marked on free daily closes, after 0.1% per trade, against SPY and QQQ bought at the same moment.
 
-Updated 2026-11-18 21:37 UTC.
+Updated 2026-11-19 02:45 UTC.
 
 ![Vision against SPY and QQQ](chart.svg)
 
 | Value | Return | vs S&P 500 | vs Nasdaq-100 | Max drawdown | Since |
 |---:|---:|---:|---:|---:|---|
-| $95,117 | -4.88% | -0.28% | -1.43% | -4.80% | 2026-11-05 |
+| $95,133 | -4.87% | -0.26% | -1.41% | -4.79% | 2026-11-05 |
 
 > Own quality cash-flow growth across several uncorrelated engines: a capped AI-capex sleeve led by NVDA, a health-care growth sleeve led by LLY, ABBV and VRTX, payments and financial ballast, and equal-weight breadth. Cash at the 18% floor absorbs a Nov 17 gap and keeps capital ready to redeploy into chips if CPI is soft and NVDA prints clean.
 
@@ -35,7 +35,7 @@ Updated 2026-11-18 21:37 UTC.
 | CRM Salesforce | 2.6% | 3.0% | -16.88% |
 | TSM TSMC | 2.5% | 2.5% | -4.51% |
 | ETN Eaton | 2.1% | 2.0% | -0.19% |
-| CVX Chevron | 2.0% | 2.0% | -6.42% |
+| CVX Chevron | 2.0% | 2.0% | -5.65% |
 | AMAT Applied Materials | 1.6% | 1.5% | +1.35% |
 | Cash | 18.8% | | |
 

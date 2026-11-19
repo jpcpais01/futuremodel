@@ -4,13 +4,13 @@
 
 A paper portfolio held by a council of Claude agents. Each decision enters when it is applied (at that moment's prices, or at a chosen 09:30 New York open), and holdings drift with prices until the next meeting. Marked on free daily closes, after 0.1% per trade, against SPY and QQQ bought at the same moment.
 
-Updated 2026-11-18 21:37 UTC.
+Updated 2026-11-19 02:44 UTC.
 
 ![The Future against SPY and QQQ](chart.svg)
 
 | Value | Return | vs S&P 500 | vs Nasdaq-100 | Max drawdown | Since |
 |---:|---:|---:|---:|---:|---|
-| $97,415 | -2.58% | +1.71% | +1.62% | -3.91% | 2026-11-04 |
+| $97,419 | -2.58% | +1.72% | +1.62% | -3.91% | 2026-11-04 |
 
 > Own the physical bottlenecks of the AI buildout (networking, power, memory, foundry) and the cash-funded platform (MSFT), sized as one financing factor near 20%. Balance them with capped, uncorrelated ballast: insurance float, gases, payments, pharma and a small oil hedge. Keep 30% cash to redeploy after CPI on 10 November and NVDA on 17 November.
 
@@ -29,7 +29,7 @@ Updated 2026-11-18 21:37 UTC.
 | AMD AMD | 3.0% | 2.7% | +9.25% |
 | ADI Analog Devices | 3.0% | 3.2% | -9.93% |
 | MU Micron Technology | 2.8% | 3.2% | -14.30% |
-| IBE.MC Iberdrola | 2.7% | 2.7% | +0.46% |
+| IBE.MC Iberdrola | 2.8% | 2.7% | +0.61% |
 | V Visa | 2.7% | 2.7% | -2.67% |
 | ABBV AbbVie | 2.7% | 2.7% | -2.70% |
 | XOM Exxon Mobil | 2.5% | 2.7% | -7.27% |
