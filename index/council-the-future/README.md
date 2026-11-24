@@ -4,13 +4,13 @@
 
 A paper portfolio held by a council of Claude agents. Each decision enters when it is applied (at that moment's prices, or at a chosen 09:30 New York open), and holdings drift with prices until the next meeting. Marked on free daily closes, after 0.1% per trade, against SPY and QQQ bought at the same moment.
 
-Updated 2026-11-21 03:21 UTC.
+Updated 2026-11-24 01:15 UTC.
 
 ![The Future against SPY and QQQ](chart.svg)
 
 | Value | Return | vs S&P 500 | vs Nasdaq-100 | Max drawdown | Since |
 |---:|---:|---:|---:|---:|---|
-| $94,017 | -5.98% | +3.61% | +5.63% | -6.54% | 2026-11-04 |
+| $94,005 | -6.00% | +3.60% | +5.62% | -6.55% | 2026-11-04 |
 
 > Own the future where cash flows fund it: MSFT, AMZN, GOOG, ANET, PANW and a 1% NVDA option, held as one named AI factor of about 15%. Fab gases and grids sit alongside them. A defensive cluster capped at 14.5% is hedged by IEF and RSP for the soft-PCE branch. Cash near 46% is kept to deploy through the Nov 25 to Dec 10 event stack.
 
@@ -29,7 +29,7 @@ Updated 2026-11-21 03:21 UTC.
 | JNJ Johnson & Johnson | 2.6% | 2.6% | -0.71% |
 | UNP Union Pacific Corporation | 2.2% | 2.3% | -6.05% |
 | ANET Arista Networks | 2.0% | 2.1% | -6.36% |
-| AI.PA Air Liquide | 1.6% | 1.5% | +0.61% |
+| AI.PA Air Liquide | 1.6% | 1.5% | -0.24% |
 | PANW Palo Alto Networks | 1.5% | 1.5% | -2.54% |
 | GOOG Alphabet | 1.5% | 1.5% | -3.73% |
 | DIS Walt Disney | 1.0% | 1.0% | -0.91% |
